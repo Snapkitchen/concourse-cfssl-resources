@@ -1,0 +1,5 @@
+# pyenv
+.python-version
+
+# osx spotlight index
+.DS_Store
