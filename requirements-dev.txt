@@ -3,3 +3,4 @@
 # linting
 pep8==1.7.1
 flake8==3.5.0
+flake8-mypy==17.8.0

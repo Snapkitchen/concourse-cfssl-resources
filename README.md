@@ -12,7 +12,7 @@ includes:
 - python3 (3.6.6)
 - cfssl
 
-also includes pip packages in `requirements.txt`
+also includes pip packages in [requirements.txt](requirements.txt)
 
 ## concourse-cfssl-root-ca-resource
 
@@ -27,6 +27,8 @@ creates and gets root ca using cfssl
 - `secret_access_key`: _optional_. the aws secret access key to use when accessing the bucket
 
 - `region_name`: _optional_. the region the bucket is in. defaults to `us-east-1`
+
+- `prefix`: _optional_. the prefix path to prepend to the cfssl files. e.g. `prefix: my/prefix/path` will result in a root ca cert file path of `<bucket>/my/prefix/path/root-ca.pem` default: `/`
 
 ### behavior
 
