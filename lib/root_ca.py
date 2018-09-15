@@ -27,26 +27,3 @@ def checksum(
     # ensure deterministic ordering of hash list for root ca
     return lib.common.hash_list([root_ca_cert_checksum,
                                  root_ca_private_key_checksum])
-
-
-# =============================================================================
-#
-# in
-#
-# =============================================================================
-
-# =============================================================================
-# do_in
-# =============================================================================
-def do_in() -> None:
-    # read the concourse input payload from stdin
-    input_config = lib.common.read_concourse_input_payload()
-
-# read input payload from stdin
-# first argument ($1) contains destination directory
-
-# check s3 for keys
-# check the checksums in s3
-# calculate combined checksum
-# if combined checksum matces, download copies locally
-# if they don't match, throw an error (version not found)
