@@ -28,7 +28,11 @@ creates and gets root ca using cfssl
 
 - `region_name`: _optional_. the region the bucket is in. defaults to `us-east-1`
 
-- `prefix`: _optional_. the prefix path to prepend to the cfssl files. e.g. `prefix: my/prefix/path` will result in a root ca cert file path of `<bucket>/my/prefix/path/root-ca.pem` default: `/`
+- `prefix`: _optional_. the prefix path to prepend to the cfssl files. e.g. `prefix: my/prefix/path` will result in a root ca cert file path of `<bucket>/my/prefix/path/root-ca.pem` default: none
+
+- `endpoint`: _optional_. custom endpoint for using S3 compatible provider.
+
+- `disable_ssl`: _optional_. disable SSL for the endpoint, useful for S3 compatible providers without SSL.
 
 ### behavior
 
