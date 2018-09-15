@@ -8,8 +8,8 @@ import lib.common
 #
 # =============================================================================
 
-ROOT_CA_CERT_FILE_NAME = 'root-ca.pem'
-ROOT_CA_PRIVATE_KEY_FILE_NAME = 'root-ca-key.pem'
+CERT_FILE_NAME = 'root-ca.pem'
+PRIVATE_KEY_FILE_NAME = 'root-ca-key.pem'
 
 
 # =============================================================================

@@ -31,7 +31,7 @@ def do_check() -> None:
         s3_resource,
         source_config['bucket'],
         lib.common.s3_key_with_prefix(
-            source_config.get('prefix'), lib.root_ca.ROOT_CA_CERT_FILE_NAME))
+            source_config.get('prefix'), lib.root_ca.CERT_FILE_NAME))
 
     # define the root ca private key object
     root_ca_private_key = lib.common.get_s3_object(
@@ -39,7 +39,7 @@ def do_check() -> None:
         source_config['bucket'],
         lib.common.s3_key_with_prefix(
             source_config.get('prefix'),
-            lib.root_ca.ROOT_CA_PRIVATE_KEY_FILE_NAME))
+            lib.root_ca.PRIVATE_KEY_FILE_NAME))
 
     # get the root ca cert checksum
     root_ca_cert_checksum = lib.common.get_s3_object_checksum(root_ca_cert)
