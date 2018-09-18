@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
-import lib.common
+# local
+import lib.aws
+import lib.concourse
 import lib.root_ca
 
 
@@ -15,48 +17,40 @@ import lib.root_ca
 # =============================================================================
 def do_check() -> None:
     # read the concourse input payload from stdin
-    input_config = lib.common.read_concourse_input_payload()
+    concourse_input_payload = lib.concourse.read_payload()
 
-    # get the source config section of the input config
-    source_config = input_config['source']
+    # get a boto3 session
+    boto3_session = \
+        lib.concourse.get_boto3_session_using_payload(concourse_input_payload)
 
-    # create the boto3 session using auth from source config
-    boto3_session = lib.common.get_boto3_session(source_config)
+    # get an s3 resource
+    s3_resource = \
+        lib.concourse.get_s3_resource_using_payload(
+            concourse_input_payload,
+            boto3_session)
 
-    # create the s3 resource using the boto3 session and source config
-    s3_resource = lib.common.get_s3_resource(boto3_session, source_config)
+    # get the root ca cert
+    root_ca_cert = lib.root_ca.get_certificate(
+        concourse_input_payload,
+        s3_resource)
 
-    # define the root ca cert object
-    root_ca_cert = lib.common.get_s3_object(
-        s3_resource,
-        source_config['bucket'],
-        lib.common.s3_key_with_prefix(
-            source_config.get('prefix'), lib.root_ca.CERT_FILE_NAME))
+    # get the root ca private key
+    root_ca_private_key = lib.root_ca.get_private_key(
+        concourse_input_payload,
+        s3_resource)
 
-    # define the root ca private key object
-    root_ca_private_key = lib.common.get_s3_object(
-        s3_resource,
-        source_config['bucket'],
-        lib.common.s3_key_with_prefix(
-            source_config.get('prefix'),
-            lib.root_ca.PRIVATE_KEY_FILE_NAME))
+    # get the checksum for the root ca cert
+    root_ca_cert_checksum = \
+        lib.root_ca.get_certificate_checksum(root_ca_cert)
 
-    # get the root ca cert checksum
-    root_ca_cert_checksum = lib.common.get_s3_object_checksum(root_ca_cert)
-
-    # get the root ca private key checksum
+    # get the checksum for the root ca private key
     root_ca_private_key_checksum = \
-        lib.common.get_s3_object_checksum(root_ca_private_key)
-
-    lib.common.log(f"root_ca_cert checksum: {root_ca_cert_checksum}")
-    lib.common.log(
-        f"root_ca_private_key checksum: {root_ca_private_key_checksum}")
+        lib.root_ca.get_private_key_checksum(root_ca_private_key)
 
     # get the checksum for the root ca
-    root_ca_checksum = lib.root_ca.checksum(
-        root_ca_cert_checksum, root_ca_private_key_checksum)
-
-    lib.common.log(f"root_ca_checksum: {root_ca_checksum}")
+    root_ca_checksum = \
+        lib.root_ca.get_checksum(
+            root_ca_cert_checksum, root_ca_private_key_checksum)
 
     # create the output payload
     check_output_payload = [
@@ -64,7 +58,7 @@ def do_check() -> None:
     ]
 
     # write the concourse output payload to stdout
-    lib.common.write_concourse_output_payload(check_output_payload)
+    lib.concourse.write_payload(check_output_payload)
 
 
 # =============================================================================

@@ -20,13 +20,13 @@ creates and gets root ca using cfssl
 
 ### source configuration
 
-- `bucket`: _required_. the name of the bucket.
+- `bucket_name`: _required_. the name of the bucket.
 
-- `access_key_id`: _optional_. the aws access key id to use when accessing the bucket
+- `access_key_id`: _required_. the aws access key id to use when accessing the bucket
 
-- `secret_access_key`: _optional_. the aws secret access key to use when accessing the bucket
+- `secret_access_key`: _required_. the aws secret access key to use when accessing the bucket
 
-- `region_name`: _optional_. the region the bucket is in. defaults to `us-east-1`
+- `region_name`: _required_. the region the bucket is in.
 
 - `prefix`: _optional_. the prefix path to prepend to the cfssl files. e.g. `prefix: my/prefix/path` will result in a root ca cert file path of `<bucket>/my/prefix/path/root-ca.pem` default: none
 
@@ -50,9 +50,9 @@ the following files will be places in the destination, based on parameters:
 
 **parameters**
 
-- `certificate`: _optional_. fetch the certificate file. default: `true`
+- `save_certificate`: _optional_. save the certificate file to disk. default: `true`
 
-- `private_key`: _optional_. fetch the private key file. default: `false`
+- `save_private_key`: _optional_. save the private key file to disk. default: `false`
 
 #### `out`: create root ca
 

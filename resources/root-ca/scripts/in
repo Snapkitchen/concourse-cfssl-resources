@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+# stdlib
+import sys
+
+# local
 import lib.common
 import lib.root_ca
 
@@ -14,14 +18,48 @@ import lib.root_ca
 # do_in
 # =============================================================================
 def do_in() -> None:
+    # read input payload from stdin
+    # first argument ($1) contains destination directory
+
+    # check s3 for keys
+    # check the checksums in s3
+    # calculate combined checksum
+    # if combined checksum matches, download copies locally
+    # if they don't match, throw an error (version not found)
+
     # read the concourse input payload from stdin
     input_config = lib.common.read_concourse_input_payload()
 
-# read input payload from stdin
-# first argument ($1) contains destination directory
+    # get the source config section of the input config
+    source_config = input_config['source']
 
-# check s3 for keys
-# check the checksums in s3
-# calculate combined checksum
-# if combined checksum matces, download copies locally
-# if they don't match, throw an error (version not found)
+    # get the requested checksum from the input config
+    requested_checksum = input_config['version']['checksum']
+
+    # get the destination dir path from the first argument
+    destination_dir_path = sys.argv[1]
+
+    # store params as kwargs
+    download_kwargs = {}
+
+    # add optional params, if specified
+    if 'params' in input_config:
+        for key_name in ['save_certificate', 'save_private_key']:
+            download_kwargs[key_name] = input_config['params'].get(key_name)
+
+    # download the requested files to destination
+    lib.root_ca.download(
+        source_config,
+        requested_checksum,
+        destination_dir_path,
+        **download_kwargs)
+
+
+# =============================================================================
+#
+# main
+#
+# =============================================================================
+
+if __name__ == "__main__":
+    do_in()
