@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
 # local
-import lib.aws
-import lib.concourse
 import lib.root_ca
 
 
@@ -16,49 +14,7 @@ import lib.root_ca
 # do_check
 # =============================================================================
 def do_check() -> None:
-    # read the concourse input payload from stdin
-    concourse_input_payload = lib.concourse.read_payload()
-
-    # get a boto3 session
-    boto3_session = \
-        lib.concourse.get_boto3_session_using_payload(concourse_input_payload)
-
-    # get an s3 resource
-    s3_resource = \
-        lib.concourse.get_s3_resource_using_payload(
-            concourse_input_payload,
-            boto3_session)
-
-    # get the root ca cert
-    root_ca_cert = lib.root_ca.get_certificate(
-        concourse_input_payload,
-        s3_resource)
-
-    # get the root ca private key
-    root_ca_private_key = lib.root_ca.get_private_key(
-        concourse_input_payload,
-        s3_resource)
-
-    # get the checksum for the root ca cert
-    root_ca_cert_checksum = \
-        lib.root_ca.get_certificate_checksum(root_ca_cert)
-
-    # get the checksum for the root ca private key
-    root_ca_private_key_checksum = \
-        lib.root_ca.get_private_key_checksum(root_ca_private_key)
-
-    # get the checksum for the root ca
-    root_ca_checksum = \
-        lib.root_ca.get_checksum(
-            root_ca_cert_checksum, root_ca_private_key_checksum)
-
-    # create the output payload
-    check_output_payload = [
-        {'checksum': root_ca_checksum}
-    ]
-
-    # write the concourse output payload to stdout
-    lib.concourse.write_payload(check_output_payload)
+    lib.root_ca.do_check()
 
 
 # =============================================================================

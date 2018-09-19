@@ -1,13 +1,12 @@
 # stdlib
 import os.path
-from typing import Optional
-
-# pip
-import boto3
+import sys
 
 # local
+import lib.aws
 import lib.concourse
-import lib.log
+import lib.hash
+from lib.log import log
 
 
 # =============================================================================
@@ -22,156 +21,251 @@ PRIVATE_KEY_FILE_NAME = 'root-ca-key.pem'
 
 # =============================================================================
 #
-# general
+# functions
 #
 # =============================================================================
 
 # =============================================================================
-# get_certificate
+# _get_certificate_file_path
 # =============================================================================
-def get_certificate(
-        payload: dict,
-        s3_resource: boto3.resources.base.ServiceResource
-) -> boto3.resources.base.ServiceResource:
-    return lib.concourse.get_s3_object_using_payload(
-        payload,
-        s3_resource,
-        CERT_FILE_NAME)
+def _get_certificate_file_path() -> str:
+    return os.path.join(sys.argv[1], CERT_FILE_NAME)
 
 
 # =============================================================================
-# get_private_key
+# _get_private_key_file_path
 # =============================================================================
-def get_private_key(
-        payload: dict,
-        s3_resource: boto3.resources.base.ServiceResource
-) -> boto3.resources.base.ServiceResource:
-    return lib.concourse.get_s3_object_using_payload(
-        payload,
-        s3_resource,
-        PRIVATE_KEY_FILE_NAME)
+def _get_private_key_file_path() -> str:
+    return os.path.join(sys.argv[1], PRIVATE_KEY_FILE_NAME)
 
 
 # =============================================================================
-# get_certificate_checksum
+# _certificate_is_downloaded
 # =============================================================================
-def get_certificate_checksum(
-    root_ca_cert: boto3.resources.base.ServiceResource
-) -> str:
-    root_ca_cert_checksum = \
-        lib.aws.get_s3_object_checksum(root_ca_cert)
-    # log to output
-    lib.log.log(f"root ca cert checksum: {root_ca_cert_checksum}")
-    # return
-    return root_ca_cert_checksum
+def _certificate_is_downloaded() -> bool:
+    return os.path.isfile(_get_certificate_file_path())
 
 
 # =============================================================================
-# get_private_key_checksum
+# _private_key_is_downloaded
 # =============================================================================
-def get_private_key_checksum(
-    root_ca_private_key: boto3.resources.base.ServiceResource
-) -> str:
-    root_ca_private_key_checksum = \
-        lib.aws.get_s3_object_checksum(root_ca_private_key)
-    # log to output
-    lib.log.log(
-        f"root ca private key checksum: {root_ca_private_key_checksum}")
-    # return
-    return root_ca_private_key_checksum
+def _private_key_is_downloaded() -> bool:
+    return os.path.isfile(_get_private_key_file_path())
 
 
 # =============================================================================
-# get_checksum
+# _get_certificate_checksum
 # =============================================================================
-def get_checksum(
-        root_ca_cert_checksum: str,
-        root_ca_private_key_checksum: str
-) -> str:
-    # ensure deterministic ordering of hash list for root ca
-    root_ca_checksum = lib.hash.hash_list([root_ca_cert_checksum,
-                                          root_ca_private_key_checksum])
-    lib.log.log(f"root ca checksum: {root_ca_checksum}")
-    return root_ca_checksum
+def _get_certificate_checksum() -> str:
+    return lib.aws.get_s3_object_checksum(certificate)
 
 
 # =============================================================================
-# _download_root_ca_cert
+# _get_private_key_checksum
 # =============================================================================
-def _download_root_ca_cert(
-    root_ca_cert,
-    root_ca_cert_checksum,
-    destination_dir_path
-) -> None:
-    destination_file_path = os.path.join(destination_dir_path, CERT_FILE_NAME)
-    lib.common.download_s3_object_to_path(
-        root_ca_cert,
-        root_ca_cert_checksum,
-        destination_file_path)
+def _get_private_key_checksum() -> str:
+    return lib.aws.get_s3_object_checksum(private_key)
 
 
 # =============================================================================
-# _download_root_ca_private_key
+# _get_downloaded_certificate_checksum()
 # =============================================================================
-def _download_root_ca_private_key(
-    root_ca_private_key,
-    root_ca_private_key_checksum,
-    destination_dir_path
-) -> None:
-    destination_file_path = \
-        os.path.join(destination_dir_path, PRIVATE_KEY_FILE_NAME)
-    lib.common.download_s3_object_to_path(
-        root_ca_private_key,
-        root_ca_private_key_checksum,
-        destination_file_path)
+def _get_downloaded_certificate_checksum() -> str:
+    return lib.hash.hash_file(_get_certificate_file_path())
 
 
 # =============================================================================
-# download
+# _get_downloaded_private_key_checksum()
 # =============================================================================
-def download(
-    source_config: dict,
-    requested_checksum: str,
-    destination_dir_path: str,
-    save_certificate: Optional[bool],
-    save_private_key: Optional[bool]
-) -> None:
-    # create the boto3 session using auth from source config
-    boto3_session = lib.common.get_boto3_session(source_config)
+def _get_downloaded_private_key_checksum() -> str:
+    return lib.hash.hash_file(_get_private_key_file_path())
 
-    # create the s3 resource using the boto3 session and source config
-    s3_resource = lib.common.get_s3_resource(boto3_session, source_config)
 
-    # get the root ca cert object
-    root_ca_cert = _root_ca_cert(source_config, s3_resource)
+# =============================================================================
+# _should_download_certificate
+# =============================================================================
+def _should_download_certificate() -> bool:
+    if 'params' in lib.concourse.payload:
+        return lib.concourse.payload['params'].get('save_certificate') is True
+    else:
+        return False
 
-    # get the root ca private key object
-    root_ca_private_key = _root_ca_private_key(source_config, s3_resource)
 
-    # get the checksums
-    root_ca_cert_checksum, root_ca_private_key_checksum = \
-        _checksums(root_ca_cert, root_ca_private_key)
+# =============================================================================
+# _should_download_private_key
+# =============================================================================
+def _should_download_private_key() -> bool:
+    if 'params' in lib.concourse.payload:
+        return lib.concourse.payload['params'].get('save_private_key') is True
+    else:
+        return False
 
-    # get the root ca checksum
-    root_ca_checksum = \
-        _checksum(root_ca_cert_checksum, root_ca_private_key_checksum)
 
+# =============================================================================
+# _download_certificate_if_requested
+# =============================================================================
+def _download_certificate_if_requested() -> None:
+    if _should_download_certificate():
+        _download_certificate()
+
+
+# =============================================================================
+# _download_private_key_if_requested
+# =============================================================================
+def _download_private_key_if_requested() -> None:
+    if _should_download_private_key():
+        _download_private_key()
+
+
+# =============================================================================
+# _download_certificate
+# =============================================================================
+def _download_certificate() -> None:
+    lib.aws.download_s3_object_to_path(
+        certificate,
+        _get_certificate_checksum(),
+        _get_certificate_file_path())
+
+
+# =============================================================================
+# _download_private_key
+# =============================================================================
+def _download_private_key() -> None:
+    lib.aws.download_s3_object_to_path(
+        private_key,
+        _get_private_key_checksum(),
+        _get_private_key_file_path())
+
+
+# =============================================================================
+# _get_checksum
+# =============================================================================
+def _get_checksum() -> str:
+    return lib.hash.hash_list([
+        _get_certificate_checksum(),
+        _get_private_key_checksum()])
+
+
+# =============================================================================
+# _requested_checksum_is_available
+# =============================================================================
+def _requested_checksum_is_available() -> bool:
+    # get requested checksum from concourse payload
+    requested_checksum = lib.concourse.payload['version']['checksum']
+    log(f"requested root ca checksum: {requested_checksum}")
+    # get current checksum
+    current_checksum = _get_checksum()
+    log(f"current root ca checksum: {current_checksum}")
+    # compare requested checksum to current checksum
+    return requested_checksum == current_checksum
+
+
+# =============================================================================
+# _get_certificate_concourse_metadata
+# =============================================================================
+def _get_certificate_concourse_metadata() -> list:
+    return [
+        {
+            'name': 'certificate_file_name',
+            'value': CERT_FILE_NAME
+        },
+        {
+            'name': 'certificate_checksum',
+            'value': _get_downloaded_certificate_checksum()
+        }]
+
+
+# =============================================================================
+# _get_private_key_concourse_metadata
+# =============================================================================
+def _get_private_key_concourse_metadata() -> list:
+    return [
+        {
+            'name': 'private_key_file_name',
+            'value': PRIVATE_KEY_FILE_NAME
+        },
+        {
+            'name': 'private_key_checksum',
+            'value': _get_downloaded_private_key_checksum()
+        }]
+
+
+# =============================================================================
+# _create_concourse_check_payload
+# =============================================================================
+def _create_concourse_check_payload(checksum: str) -> list:
+    return [{'checksum': checksum}]
+
+
+# =============================================================================
+# _write_concourse_check_payload
+# =============================================================================
+def _write_concourse_check_payload() -> None:
+    # get checksum,
+    # create a concourse check payload,
+    # and write it out
+    lib.concourse.write_payload(
+        _create_concourse_check_payload(
+            _get_checksum()))
+
+
+# =============================================================================
+# _create_concourse_in_payload
+# =============================================================================
+def _create_concourse_in_payload() -> dict:
+    in_payload: dict = {
+        'version': {
+            'checksum': lib.concourse.payload['version']['checksum']
+        },
+        'metadata': []
+    }
+    if _certificate_is_downloaded():
+        in_payload['metadata'].extend(_get_certificate_concourse_metadata())
+    if _private_key_is_downloaded():
+        in_payload['metadata'].extend(_get_private_key_concourse_metadata())
+    return in_payload
+
+
+# =============================================================================
+# _write_concourse_in_payload
+# =============================================================================
+def _write_concourse_in_payload() -> None:
+    lib.concourse.write_payload(_create_concourse_in_payload())
+
+
+# =============================================================================
+# do_check
+# =============================================================================
+def do_check() -> None:
+    _write_concourse_check_payload()
+
+
+# =============================================================================
+# do_in
+# =============================================================================
+def do_in() -> None:
     # compare the root ca checksum vs the requested checksum
-    if requested_checksum != root_ca_checksum:
-        # cannot continue if values do not match
-        raise ValueError(f"current checksum '{root_ca_checksum}' does not"
-                         f" match requested checksum '{requested_checksum}'")
+    if _requested_checksum_is_available():
+        _download_certificate_if_requested()
+        _download_private_key_if_requested()
+        _write_concourse_in_payload()
+    else:
+        # cannot continue if checksum is unavailable
+        raise ValueError(f"requested checksum is unavailable")
 
-    # download the certificate file, if requested
-    if save_certificate:
-        _download_root_ca_cert(
-            root_ca_cert,
-            root_ca_cert_checksum,
-            destination_dir_path)
 
-    # download the private key file, if requested
-    if save_private_key:
-        _download_root_ca_private_key(
-            root_ca_private_key,
-            root_ca_private_key_checksum,
-            destination_dir_path)
+# =============================================================================
+#
+# properties
+#
+# =============================================================================
+
+# =============================================================================
+# certificate
+# =============================================================================
+certificate = lib.aws.get_s3_object(CERT_FILE_NAME)
+
+# =============================================================================
+# private_key
+# =============================================================================
+private_key = lib.aws.get_s3_object(PRIVATE_KEY_FILE_NAME)

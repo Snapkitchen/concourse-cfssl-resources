@@ -5,6 +5,7 @@ from typing import Optional
 import boto3
 
 # local
+import lib.concourse
 import lib.hash
 
 
@@ -14,50 +15,19 @@ import lib.hash
 #
 # =============================================================================
 
-AWS_S3_CHECKSUM_METADATA_KEY_NAME = 'sha256'
+CHECKSUM_METADATA_KEY_NAME: str = 'sha256'
 
 
 # =============================================================================
-# get_boto3_session
+#
+# functions
+#
 # =============================================================================
-def get_boto3_session(
-    access_key_id: str,
-    secret_access_key: str,
-    region_name: str
-) -> boto3.session.Session:
-    return boto3.session.Session(
-        aws_access_key_id=access_key_id,
-        aws_secret_access_key=secret_access_key,
-        region_name=region_name)
-
 
 # =============================================================================
-# get_s3_resource
+# _format_s3_key_with_prefix
 # =============================================================================
-def get_s3_resource(
-        boto3_session: boto3.session.Session,
-        endpoint_url: Optional[str],
-        disable_ssl: Optional[bool]) -> boto3.resources.base.ServiceResource:
-    return boto3_session.resource(
-        's3',
-        endpoint_url=endpoint_url,
-        use_ssl=False if disable_ssl else True)
-
-
-# =============================================================================
-# get_s3_object
-# =============================================================================
-def get_s3_object(
-        s3_resource: boto3.resources.base.ServiceResource,
-        bucket_name: str,
-        key: str) -> boto3.resources.base.ServiceResource:
-    return s3_resource.Object(bucket_name, key)
-
-
-# =============================================================================
-# format_s3_key_with_prefix
-# =============================================================================
-def format_s3_key_with_prefix(prefix: Optional[str], key: str) -> str:
+def _format_s3_key_with_prefix(prefix: Optional[str], key: str) -> str:
     if prefix:
         return prefix + '/' + key
     else:
@@ -65,11 +35,23 @@ def format_s3_key_with_prefix(prefix: Optional[str], key: str) -> str:
 
 
 # =============================================================================
+# get_s3_object
+# =============================================================================
+def get_s3_object(file_name: str) -> boto3.resources.base.ServiceResource:
+    return s3_resource.Object(
+        lib.concourse.payload['source']['bucket_name'],
+        _format_s3_key_with_prefix(
+            lib.concourse.payload['source'].get('prefix'),
+            file_name))
+
+
+# =============================================================================
 # get_s3_object_checksum
 # =============================================================================
 def get_s3_object_checksum(
-        s3_object: boto3.resources.base.ServiceResource) -> str:
-    return s3_object.metadata[AWS_S3_CHECKSUM_METADATA_KEY_NAME]
+    s3_object: boto3.resources.base.ServiceResource
+) -> boto3.resources.base.ServiceResource:
+    return s3_object.metadata[CHECKSUM_METADATA_KEY_NAME]
 
 
 # =============================================================================
@@ -85,3 +67,29 @@ def download_s3_object_to_path(
     if expected_checksum != destination_file_hash:
         raise ValueError(f"expected checksum '{expected_checksum}' does"
                          f" not match file checksum '{destination_file_hash}'")
+
+
+# =============================================================================
+#
+# properties
+#
+# =============================================================================
+
+# =============================================================================
+# boto3_session
+# =============================================================================
+boto3_session = boto3.session.Session(
+    aws_access_key_id=lib.concourse.payload['source']['access_key_id'],
+    aws_secret_access_key=lib.concourse.payload['source']['secret_access_key'],
+    region_name=lib.concourse.payload['source']['region_name'])
+
+
+# =============================================================================
+# s3_resource
+# =============================================================================
+s3_resource = boto3_session.resource(
+    's3',
+    endpoint_url=lib.concourse.payload['source'].get('endpoint'),
+    use_ssl=(False if
+             lib.concourse.payload['source'].get('disable_ssl')
+             else True))
