@@ -12,7 +12,7 @@ import hashlib
 # hash_string
 # =============================================================================
 def hash_string(string: str) -> str:
-    return hashlib.sha256(str.encode('utf-8')).hexdigest()
+    return hashlib.sha256(string.encode('utf-8')).hexdigest()
 
 
 # =============================================================================

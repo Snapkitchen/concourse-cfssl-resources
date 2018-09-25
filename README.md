@@ -58,9 +58,35 @@ the following files will be places in the destination, based on parameters:
 
 creates a new root ca certificate and private key
 
+note: parameters are mostly 1:1 analogous to their cfssl counterparts
+
+see cfssl documentation for best practices and examples
+
 **parameters**
 
-- `expiry`: _optional._ the expiration length to use for the ca (a time duration in the form understood by go's time package). e.g. `43800h` for 5 years. default value is cfssl's default.
+- `CN`: _required_. the certificate common name
+
+- `key`: _optional_. the key parameters
+
+	- `algo`: _optional_. algorithm. default: `ecdsa`
+
+	- `size`: _optional_. size. default: `256`
+
+- `ca`: _optional_. the ca parameters
+
+	- `expiry`: _optional_. the expiration length to use for the ca (a time duration in the form understood by go's time package). default: `43800h`
+
+- `names`: _optional_. array containing single dict with fields used when signing
+
+	- `C`: _optional_. country code
+
+	- `L`: _optional_. city / locality
+
+	- `O`: _optional_. organization
+
+	- `OU`: _optional_. organizational unit
+
+	- `ST`: _optional_. state
 
 ## concourse-cfssl-intermediate-ca-resource
 
@@ -81,8 +107,6 @@ install python 3.6 and requirements from `requirements-dev.txt`
 install cfssl
 
 `.vscode/settings.json` will enable linters in vscode
-
-`.env` sets `PYTHONPATH` to allow ide to resolve lib file path
 
 ## building
 

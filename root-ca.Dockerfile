@@ -6,6 +6,7 @@ COPY resources/root-ca/scripts/check \
     /opt/resource/
 COPY lib/__init__.py \
     lib/aws.py \
+    lib/cfssl.py \
     lib/concourse.py \
     lib/hash.py \
     lib/log.py \

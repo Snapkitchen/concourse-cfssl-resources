@@ -4,6 +4,7 @@ import sys
 
 # local
 import lib.aws
+import lib.cfssl
 import lib.concourse
 import lib.hash
 from lib.log import log
@@ -15,8 +16,9 @@ from lib.log import log
 #
 # =============================================================================
 
-CERT_FILE_NAME = 'root-ca.pem'
-PRIVATE_KEY_FILE_NAME = 'root-ca-key.pem'
+FILE_PREFIX = 'root-ca'
+CERT_FILE_NAME = f"{FILE_PREFIX}.pem"
+PRIVATE_KEY_FILE_NAME = f"{FILE_PREFIX}-key.pem"
 
 
 # =============================================================================
@@ -26,17 +28,24 @@ PRIVATE_KEY_FILE_NAME = 'root-ca-key.pem'
 # =============================================================================
 
 # =============================================================================
+# _get_dir_path
+# =============================================================================
+def _get_dir_path() -> str:
+    return sys.argv[1]
+
+
+# =============================================================================
 # _get_certificate_file_path
 # =============================================================================
 def _get_certificate_file_path() -> str:
-    return os.path.join(sys.argv[1], CERT_FILE_NAME)
+    return os.path.join(_get_dir_path(), CERT_FILE_NAME)
 
 
 # =============================================================================
 # _get_private_key_file_path
 # =============================================================================
 def _get_private_key_file_path() -> str:
-    return os.path.join(sys.argv[1], PRIVATE_KEY_FILE_NAME)
+    return os.path.join(_get_dir_path(), PRIVATE_KEY_FILE_NAME)
 
 
 # =============================================================================
@@ -68,16 +77,16 @@ def _get_private_key_checksum() -> str:
 
 
 # =============================================================================
-# _get_downloaded_certificate_checksum()
+# _get_local_certificate_checksum()
 # =============================================================================
-def _get_downloaded_certificate_checksum() -> str:
+def _get_local_certificate_checksum() -> str:
     return lib.hash.hash_file(_get_certificate_file_path())
 
 
 # =============================================================================
-# _get_downloaded_private_key_checksum()
+# _get_local_private_key_checksum()
 # =============================================================================
-def _get_downloaded_private_key_checksum() -> str:
+def _get_local_private_key_checksum() -> str:
     return lib.hash.hash_file(_get_private_key_file_path())
 
 
@@ -138,12 +147,41 @@ def _download_private_key() -> None:
 
 
 # =============================================================================
+# _upload_certificate
+# =============================================================================
+def _upload_certificate() -> None:
+    lib.aws.upload_s3_object_to_path(
+        certificate,
+        _get_local_certificate_checksum(),
+        _get_certificate_file_path())
+
+
+# =============================================================================
+# _upload_private_key
+# =============================================================================
+def _upload_private_key() -> None:
+    lib.aws.upload_s3_object_to_path(
+        private_key,
+        _get_local_private_key_checksum(),
+        _get_private_key_file_path())
+
+
+# =============================================================================
 # _get_checksum
 # =============================================================================
 def _get_checksum() -> str:
     return lib.hash.hash_list([
         _get_certificate_checksum(),
         _get_private_key_checksum()])
+
+
+# =============================================================================
+# _get_local_checksum
+# =============================================================================
+def _get_local_checksum() -> str:
+    return lib.hash.hash_list([
+        _get_local_certificate_checksum(),
+        _get_local_private_key_checksum()])
 
 
 # =============================================================================
@@ -171,7 +209,7 @@ def _get_certificate_concourse_metadata() -> list:
         },
         {
             'name': 'certificate_checksum',
-            'value': _get_downloaded_certificate_checksum()
+            'value': _get_local_certificate_checksum()
         }]
 
 
@@ -186,8 +224,15 @@ def _get_private_key_concourse_metadata() -> list:
         },
         {
             'name': 'private_key_checksum',
-            'value': _get_downloaded_private_key_checksum()
+            'value': _get_local_private_key_checksum()
         }]
+
+
+# =============================================================================
+# _create_concourse_check_payload
+# =============================================================================
+def _create_root_ca_private_key_and_certificate() -> None:
+    lib.cfssl.create_root_ca(_get_dir_path(), FILE_PREFIX)
 
 
 # =============================================================================
@@ -234,6 +279,34 @@ def _write_concourse_in_payload() -> None:
 
 
 # =============================================================================
+# _create_concourse_out_payload
+# =============================================================================
+def _create_concourse_out_payload() -> dict:
+    _create_root_ca_private_key_and_certificate()
+    log(f"root ca certificate checksum: {_get_local_certificate_checksum()}")
+    log(f"root ca private key checksum: {_get_local_private_key_checksum()}")
+    log(f"root ca checksum: {_get_local_checksum()}")
+    _upload_certificate()
+    _upload_private_key()
+    out_payload: dict = {
+        'version': {
+            'checksum': _get_local_checksum()
+        },
+        'metadata': []
+    }
+    out_payload['metadata'].extend(_get_certificate_concourse_metadata())
+    out_payload['metadata'].extend(_get_private_key_concourse_metadata())
+    return out_payload
+
+
+# =============================================================================
+# _write_concourse_out_payload
+# =============================================================================
+def _write_concourse_out_payload() -> None:
+    lib.concourse.write_payload(_create_concourse_out_payload())
+
+
+# =============================================================================
 # do_check
 # =============================================================================
 def do_check() -> None:
@@ -252,6 +325,13 @@ def do_in() -> None:
     else:
         # cannot continue if checksum is unavailable
         raise ValueError(f"requested checksum is unavailable")
+
+
+# =============================================================================
+# do_in
+# =============================================================================
+def do_out() -> None:
+    _write_concourse_out_payload()
 
 
 # =============================================================================

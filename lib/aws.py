@@ -70,6 +70,21 @@ def download_s3_object_to_path(
 
 
 # =============================================================================
+# upload_s3_object_to_path
+# =============================================================================
+def upload_s3_object_to_path(
+    s3_object,
+    checksum,
+    source_file_path
+) -> None:
+    s3_object.upload_file(source_file_path,
+                          ExtraArgs={
+                              'Metadata': {
+                                  CHECKSUM_METADATA_KEY_NAME: checksum
+                              }})
+
+
+# =============================================================================
 #
 # properties
 #
