@@ -20,6 +20,9 @@ CFSSLJSON_BIN_FILE_PATH = '/root/go/bin/cfssljson'
 ROOT_CA_DEFAULT_KEY_ALGORITHM = 'ecdsa'
 ROOT_CA_DEFAULT_KEY_SIZE = 256
 ROOT_CA_DEFAULT_EXPIRY = '87600h'
+INTERMEDIATE_CA_DEFAULT_KEY_ALGORITHM = 'ecdsa'
+INTERMEDIATE_CA_DEFAULT_KEY_SIZE = 256
+INTERMEDIATE_CA_DEFAULT_EXPIRY = '43800h'
 
 
 # =============================================================================
@@ -33,11 +36,21 @@ ROOT_CA_DEFAULT_EXPIRY = '87600h'
 # _run
 # =============================================================================
 def _run(bin: str, *args: str, input=None) -> subprocess.CompletedProcess:
-    return subprocess.run([bin] + list(args),
-                          stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE,
-                          encoding='utf-8',
-                          input=input)
+    command_output = subprocess.run([bin] + list(args),
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    encoding='utf-8',
+                                    input=input)
+    # log stderr if present
+    if command_output.stderr:
+        log(f"{bin} stderr:")
+        log(command_output.stderr)
+
+    # raise if non-zero
+    command_output.check_returncode()
+
+    # return the command output
+    return command_output
 
 
 # =============================================================================
@@ -59,11 +72,11 @@ def _cfssljson(*args: str, input=None) -> subprocess.CompletedProcess:
 
 
 # =============================================================================
-# _create_root_ca_config
+# _create_root_ca_csr
 # =============================================================================
-def _create_root_ca_config() -> dict:
-    # create the base config
-    cfssl_config: dict = {
+def _create_root_ca_csr() -> dict:
+    # create the base request
+    signing_request: dict = {
         'CN': lib.concourse.payload['params']['CN'],
         'key': {
             'algo': ROOT_CA_DEFAULT_KEY_ALGORITHM,
@@ -78,24 +91,27 @@ def _create_root_ca_config() -> dict:
     # set key properties from payload, if present
     if 'key' in lib.concourse.payload['params']:
         # key algorithm
-        cfssl_config['key']['algo'] = \
+        signing_request['key']['algo'] = \
             lib.concourse.payload['params']['key'].get(
                 'algo', ROOT_CA_DEFAULT_KEY_ALGORITHM)
         # key size
-        cfssl_config['key']['size'] = \
+        signing_request['key']['size'] = \
             lib.concourse.payload['params']['key'].get(
                 'size', ROOT_CA_DEFAULT_KEY_SIZE)
     # set ca properties from payload, if present
     if 'ca' in lib.concourse.payload['params']:
         # expiry
-        cfssl_config['ca']['expiry'] = \
+        signing_request['ca']['expiry'] = \
             lib.concourse.payload['params']['ca'].get(
                 'expiry', ROOT_CA_DEFAULT_EXPIRY)
     # set names from payload, if present
     if 'names' in lib.concourse.payload['params']:
-        cfssl_config['names'] = lib.concourse.payload['params']['names']
-    # return config
-    return cfssl_config
+        signing_request['names'] = lib.concourse.payload['params']['names']
+    # log config for debugging
+    log("root ca signing request:")
+    log(json.dumps(signing_request, indent=4))
+    # return signing request
+    return signing_request
 
 
 # =============================================================================
@@ -103,37 +119,67 @@ def _create_root_ca_config() -> dict:
 # =============================================================================
 def create_root_ca(destination_dir_path,
                    file_prefix) -> None:
-    # create root ca config
-    root_ca_config = _create_root_ca_config()
-
-    # log config for debugging
-    log("root_ca_config:")
-    log(json.dumps(root_ca_config, indent=4))
+    # create root ca csr
+    root_ca_csr = _create_root_ca_csr()
 
     # generate the root ca
     cfssl_output = _cfssl('gencert',
                           '-initca=true',
                           '-loglevel=0',
                           '-',
-                          input=json.dumps(root_ca_config))
-
-    # log stderr if present
-    if cfssl_output.stderr:
-        log("cfssl stderr:")
-        log(cfssl_output.stderr)
-
-    # raise if non-zero
-    cfssl_output.check_returncode()
+                          input=json.dumps(root_ca_csr))
 
     # capture the output to file
-    cfssljson_output = _cfssljson('-bare',
-                                  os.path.join(destination_dir_path,
-                                               file_prefix),
-                                  input=cfssl_output.stdout)
-    # log stderr if present
-    if cfssljson_output.stderr:
-        log("cfssljson stderr:")
-        log(cfssljson_output.stderr)
+    _cfssljson('-bare',
+               os.path.join(destination_dir_path,
+                            file_prefix),
+               input=cfssl_output.stdout)
 
-    # raise if non-zero
-    cfssljson_output.check_returncode()
+
+# =============================================================================
+# _create_intermediate_ca_csr
+# =============================================================================
+def _create_intermediate_ca_csr() -> dict:
+    # create the base request
+    signing_request: dict = {
+        'key': {
+            'algo': INTERMEDIATE_CA_DEFAULT_KEY_ALGORITHM,
+            'size': INTERMEDIATE_CA_DEFAULT_KEY_SIZE
+        },
+        'names': []
+    }
+    # set key properties from payload, if present
+    if 'key' in lib.concourse.payload['params']:
+        # key algorithm
+        signing_request['key']['algo'] = \
+            lib.concourse.payload['params']['key'].get(
+                'algo', INTERMEDIATE_CA_DEFAULT_KEY_ALGORITHM)
+        # key size
+        signing_request['key']['size'] = \
+            lib.concourse.payload['params']['key'].get(
+                'size', INTERMEDIATE_CA_DEFAULT_KEY_SIZE)
+    # set ca properties from payload, if present
+    if 'ca' in lib.concourse.payload['params']:
+        # expiry
+        signing_request['ca']['expiry'] = \
+            lib.concourse.payload['params']['ca'].get(
+                'expiry', INTERMEDIATE_CA_DEFAULT_EXPIRY)
+    # set names from payload, if present
+    if 'names' in lib.concourse.payload['params']:
+        signing_request['names'] = lib.concourse.payload['params']['names']
+    # log config for debugging
+    log("intermediate ca signing request:")
+    log(json.dumps(signing_request, indent=4))
+    # return signing request
+    return signing_request
+
+
+# =============================================================================
+# create_intermediate_ca
+# =============================================================================
+def create_intermediate_ca(repository_dir_path,
+                           file_prefix,
+                           root_ca_certificate_file_name,
+                           root_ca_private_key_file_name) -> None:
+    # create intermediate ca csr
+    intermediate_ca_csr = _create_intermediate_ca_csr()

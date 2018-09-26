@@ -51,7 +51,25 @@ def get_s3_object(file_name: str) -> boto3.resources.base.ServiceResource:
 def get_s3_object_checksum(
     s3_object: boto3.resources.base.ServiceResource
 ) -> boto3.resources.base.ServiceResource:
-    return s3_object.metadata[CHECKSUM_METADATA_KEY_NAME]
+    # workaround for https://github.com/boto/boto3/issues/1709
+    # which results in case-sensitive keys.
+    # since it's impossible to end up with two different keys
+    # in the metadata dict with the same case-insensitive name
+    # (e.g. 'Foo' and 'foo'), then we can assume the lowercased
+    # version of the key is the same as the lowercased
+    # version of the expected key
+    # in addition, when setting the value, the case of the
+    # metadata key does not matter, by design
+
+    # loop through each key in the metadata dict
+    for key in s3_object.metadata.keys():
+        # if the lowercased version of the key
+        # matches the lowercased version of the expected key
+        if key.lower() == CHECKSUM_METADATA_KEY_NAME.lower():
+            # return the actual key's value
+            return s3_object.metadata[key]
+    # otherwise, if we didn't return, throw a key error
+    raise KeyError(f"metadata key '{CHECKSUM_METADATA_KEY_NAME}' not found")
 
 
 # =============================================================================
