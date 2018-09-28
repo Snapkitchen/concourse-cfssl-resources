@@ -235,7 +235,14 @@ def _get_private_key_concourse_metadata() -> list:
 # _create_concourse_check_payload
 # =============================================================================
 def _create_intermediate_ca_private_key_and_certificate() -> None:
-    lib.cfssl.create_intermediate_ca(_get_dir_path(), FILE_PREFIX)
+    # download root ca certificate and private key
+    lib.root_ca._download_certificate()
+    lib.root_ca._download_private_key()
+    lib.cfssl.create_intermediate_ca(
+        _get_dir_path(),
+        FILE_PREFIX,
+        lib.root_ca.CERT_FILE_NAME,
+        lib.root_ca.PRIVATE_KEY_FILE_NAME)
 
 
 # =============================================================================
@@ -286,20 +293,22 @@ def _write_concourse_in_payload() -> None:
 # =============================================================================
 def _create_concourse_out_payload() -> dict:
     _create_intermediate_ca_private_key_and_certificate()
-    # log(f"root ca certificate checksum: {_get_local_certificate_checksum()}")
-    # log(f"root ca private key checksum: {_get_local_private_key_checksum()}")
-    # log(f"root ca checksum: {_get_local_checksum()}")
-    # _upload_certificate()
-    # _upload_private_key()
-    # out_payload: dict = {
-    #     'version': {
-    #         'checksum': _get_local_checksum()
-    #     },
-    #     'metadata': []
-    # }
-    # out_payload['metadata'].extend(_get_certificate_concourse_metadata())
-    # out_payload['metadata'].extend(_get_private_key_concourse_metadata())
-    out_payload: dict = {}
+    log('intermediate ca certificate checksum: '
+        f"{_get_local_certificate_checksum()}")
+    log('intermediate ca private key checksum: '
+        f"{_get_local_private_key_checksum()}")
+    log('intermediate ca checksum: '
+        f"{_get_local_checksum()}")
+    _upload_certificate()
+    _upload_private_key()
+    out_payload: dict = {
+        'version': {
+            'checksum': _get_local_checksum()
+        },
+        'metadata': []
+    }
+    out_payload['metadata'].extend(_get_certificate_concourse_metadata())
+    out_payload['metadata'].extend(_get_private_key_concourse_metadata())
     return out_payload
 
 
