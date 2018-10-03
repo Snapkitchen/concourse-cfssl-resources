@@ -342,7 +342,7 @@ def _create_out_payload(
             certificate_file_name,
             certificate_checksum))
     out_payload['metadata'].extend(
-        _create_certificate_metadata(
+        _create_private_key_metadata(
             private_key_file_name,
             private_key_checksum))
     return out_payload
@@ -638,9 +638,9 @@ def intermediate_ca_check() -> None:
     intermediate_ca_private_key_checksum = \
         _get_s3_object_checksum(intermediate_ca_private_key)
 
-    log('intermediate ca certificate checksum:'
+    log('intermediate ca certificate checksum: '
         f"{intermediate_ca_certificate_checksum}")
-    log('intermediate ca private key checksum:'
+    log('intermediate ca private key checksum: '
         f"{intermediate_ca_private_key_checksum}")
 
     # get remote checksum
@@ -683,9 +683,9 @@ def intermediate_ca_in() -> None:
     intermediate_ca_private_key_checksum = \
         _get_s3_object_checksum(intermediate_ca_private_key)
 
-    log('intermediate ca certificate checksum:'
+    log('intermediate ca certificate checksum: '
         f"{intermediate_ca_certificate_checksum}")
-    log('intermediate ca private key checksum:'
+    log('intermediate ca private key checksum: '
         f"{intermediate_ca_private_key_checksum}")
 
     # get remote checksum
@@ -818,13 +818,13 @@ def intermediate_ca_out() -> None:
 
     # get intermediate ca local checksums
     intermediate_ca_certificate_checksum = \
-        _hash_file(root_ca_certificate_file_path)
+        _hash_file(intermediate_ca_certificate_file_path)
     intermediate_ca_private_key_checksum = \
-        _hash_file(root_ca_private_key_file_path)
+        _hash_file(intermediate_ca_private_key_file_path)
 
-    log('intermediate ca certificate checksum:'
+    log('intermediate ca certificate checksum: '
         f"{intermediate_ca_certificate_checksum}")
-    log('intermediate ca private key checksum:'
+    log('intermediate ca private key checksum: '
         f"{intermediate_ca_private_key_checksum}")
 
     # get intermediate ca local checksum
@@ -867,6 +867,288 @@ def intermediate_ca_out() -> None:
         intermediate_ca_certificate_checksum,
         INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME,
         intermediate_ca_private_key_checksum)
+
+    # write output
+    _write_payload(output_payload)
+
+
+# =============================================================================
+#
+# leaf lifecycle functions
+#
+# =============================================================================
+
+# =============================================================================
+# leaf_check
+# =============================================================================
+def leaf_check() -> None:
+    # read input
+    input_payload = _read_payload()
+
+    # get file names
+    leaf_file_prefix = input_payload['source']['leaf_name']
+    leaf_certificate_file_name = f"{leaf_file_prefix}.pem"
+    leaf_private_key_file_name = f"{leaf_file_prefix}-key.pem"
+
+    # create s3 objects
+    boto3_session = _get_boto3_session(input_payload)
+    s3_resource = _get_s3_resource(input_payload, boto3_session)
+    leaf_certificate = \
+        _get_s3_object(
+            input_payload,
+            s3_resource,
+            leaf_certificate_file_name)
+    leaf_private_key = \
+        _get_s3_object(
+            input_payload,
+            s3_resource,
+            leaf_private_key_file_name)
+
+    # get remote checksums
+    leaf_certificate_checksum = \
+        _get_s3_object_checksum(leaf_certificate)
+    leaf_private_key_checksum = \
+        _get_s3_object_checksum(leaf_private_key)
+
+    log('leaf certificate checksum: '
+        f"{leaf_certificate_checksum}")
+    log('leaf private key checksum: '
+        f"{leaf_private_key_checksum}")
+
+    # get remote checksum
+    leaf_checksum = \
+        _get_keypair_checksum(
+            leaf_certificate_checksum,
+            leaf_private_key_checksum)
+
+    log(f"leaf checksum: {leaf_checksum}")
+
+    # do check
+    _do_check(leaf_checksum)
+
+
+# =============================================================================
+# leaf_in
+# =============================================================================
+def leaf_in() -> None:
+    # read input
+    input_payload = _read_payload()
+    repository_dir = _get_repository_dir_path()
+
+    # get file names
+    leaf_file_prefix = input_payload['source']['leaf_name']
+    leaf_certificate_file_name = f"{leaf_file_prefix}.pem"
+    leaf_private_key_file_name = f"{leaf_file_prefix}-key.pem"
+
+    # create s3 objects
+    boto3_session = _get_boto3_session(input_payload)
+    s3_resource = _get_s3_resource(input_payload, boto3_session)
+    leaf_certificate = \
+        _get_s3_object(
+            input_payload,
+            s3_resource,
+            leaf_certificate_file_name)
+    leaf_private_key = \
+        _get_s3_object(
+            input_payload,
+            s3_resource,
+            leaf_private_key_file_name)
+
+    # get remote checksums
+    leaf_certificate_checksum = \
+        _get_s3_object_checksum(leaf_certificate)
+    leaf_private_key_checksum = \
+        _get_s3_object_checksum(leaf_private_key)
+
+    log('leaf certificate checksum: '
+        f"{leaf_certificate_checksum}")
+    log('leaf private key checksum: '
+        f"{leaf_private_key_checksum}")
+
+    # get remote checksum
+    leaf_checksum = \
+        _get_keypair_checksum(
+            leaf_certificate_checksum,
+            leaf_private_key_checksum)
+
+    log(f"leaf checksum: {leaf_checksum}")
+
+    # get file paths
+    leaf_certificate_file_path = \
+        _get_repository_file_path(
+            repository_dir,
+            leaf_certificate_file_name)
+    leaf_private_key_file_path = \
+        _get_repository_file_path(
+            repository_dir,
+            leaf_private_key_file_name)
+
+    # check for requested checksum
+    # and download
+    if _checksum_exists(
+            input_payload,
+            leaf_checksum):
+        if _should_download_certificate(input_payload):
+            _download_s3_object_to_path(
+                leaf_certificate,
+                leaf_certificate_checksum,
+                leaf_certificate_file_path)
+        if _should_download_private_key(input_payload):
+            _download_s3_object_to_path(
+                leaf_private_key,
+                leaf_private_key_checksum,
+                leaf_private_key_file_path)
+    else:
+        # cannot continue if checksum is unavailable
+        raise ValueError(f"requested checksum is unavailable")
+
+    # create output payload
+    output_payload = _create_in_payload(
+        input_payload,
+        leaf_certificate_file_name,
+        leaf_certificate_file_path,
+        leaf_certificate_checksum,
+        leaf_private_key_file_name,
+        leaf_private_key_file_path,
+        leaf_private_key_checksum)
+
+    # write output
+    _write_payload(output_payload)
+
+
+# =============================================================================
+# leaf_out
+# =============================================================================
+def leaf_out() -> None:
+    # read input
+    input_payload = _read_payload()
+    repository_dir = _get_repository_dir_path()
+
+    # create intermediate ca s3 objects
+    boto3_session = _get_boto3_session(input_payload)
+    s3_resource = _get_s3_resource(input_payload, boto3_session)
+    intermediate_ca_certificate = \
+        _get_s3_object(
+            input_payload,
+            s3_resource,
+            INTERMEDIATE_CA_CERTIFICATE_FILE_NAME)
+    intermediate_ca_private_key = \
+        _get_s3_object(
+            input_payload,
+            s3_resource,
+            INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME)
+
+    # get intermediate ca remote checksums
+    intermediate_ca_certificate_checksum = \
+        _get_s3_object_checksum(intermediate_ca_certificate)
+    intermediate_ca_private_key_checksum = \
+        _get_s3_object_checksum(intermediate_ca_private_key)
+
+    log('intermediate ca certificate checksum: '
+        f"{intermediate_ca_certificate_checksum}")
+    log('intermediate ca private key checksum: '
+        f"{intermediate_ca_private_key_checksum}")
+
+    # get intermediate ca remote checksum
+    intermediate_ca_checksum = \
+        _get_keypair_checksum(
+            intermediate_ca_certificate_checksum,
+            intermediate_ca_private_key_checksum)
+
+    log(f"intermediate ca checksum: {intermediate_ca_checksum}")
+
+    # get intermediate ca file paths
+    intermediate_ca_certificate_file_path = \
+        _get_repository_file_path(
+            repository_dir,
+            INTERMEDIATE_CA_CERTIFICATE_FILE_NAME)
+    intermediate_ca_private_key_file_path = \
+        _get_repository_file_path(
+            repository_dir,
+            INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME)
+
+    # download intermediate ca keypair
+    _download_s3_object_to_path(
+        intermediate_ca_certificate,
+        intermediate_ca_certificate_checksum,
+        intermediate_ca_certificate_file_path)
+    _download_s3_object_to_path(
+        intermediate_ca_private_key,
+        intermediate_ca_private_key_checksum,
+        intermediate_ca_private_key_file_path)
+
+    # create leaf key pair
+    leaf_file_prefix = input_payload['source']['leaf_name']
+    lib.cfssl.create_leaf(
+        input_payload,
+        repository_dir,
+        leaf_file_prefix,
+        INTERMEDIATE_CA_CERTIFICATE_FILE_NAME,
+        INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME)
+
+    # get leaf file paths
+    leaf_certificate_file_name = f"{leaf_file_prefix}.pem"
+    leaf_certificate_file_path = \
+        _get_repository_file_path(
+            repository_dir,
+            leaf_certificate_file_name)
+    leaf_private_key_file_name = f"{leaf_file_prefix}-key.pem"
+    leaf_private_key_file_path = \
+        _get_repository_file_path(
+            repository_dir,
+            leaf_private_key_file_name)
+
+    # get leaf local checksums
+    leaf_certificate_checksum = \
+        _hash_file(leaf_certificate_file_path)
+    leaf_private_key_checksum = \
+        _hash_file(leaf_private_key_file_path)
+
+    log('leaf certificate checksum: '
+        f"{leaf_certificate_checksum}")
+    log('leaf private key checksum: '
+        f"{leaf_private_key_checksum}")
+
+    # get leaf local checksum
+    leaf_checksum = \
+        _get_keypair_checksum(
+            leaf_certificate_checksum,
+            leaf_private_key_checksum)
+
+    log(f"leaf checksum: {leaf_checksum}")
+
+    # create leaf s3 objects
+    leaf_certificate = \
+        _get_s3_object(
+            input_payload,
+            s3_resource,
+            leaf_certificate_file_name)
+    leaf_private_key = \
+        _get_s3_object(
+            input_payload,
+            s3_resource,
+            leaf_private_key_file_name)
+
+    # upload certificate
+    _upload_s3_object_to_path(
+        leaf_certificate,
+        leaf_certificate_checksum,
+        leaf_certificate_file_path)
+
+    # upload private key
+    _upload_s3_object_to_path(
+        leaf_private_key,
+        leaf_private_key_checksum,
+        leaf_private_key_file_path)
+
+    # create output payload
+    output_payload = _create_out_payload(
+        input_payload,
+        leaf_checksum,
+        leaf_certificate_file_name,
+        leaf_certificate_checksum,
+        leaf_private_key_file_name,
+        leaf_private_key_checksum)
 
     # write output
     _write_payload(output_payload)

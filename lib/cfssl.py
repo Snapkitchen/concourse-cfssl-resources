@@ -2,6 +2,7 @@
 import json
 import os
 import subprocess
+from typing import List
 
 # local
 import lib.concourse
@@ -24,6 +25,15 @@ INTERMEDIATE_CA_DEFAULT_KEY_ALGORITHM: str = 'rsa'
 INTERMEDIATE_CA_DEFAULT_KEY_SIZE: int = 2048
 INTERMEDIATE_CA_DEFAULT_EXPIRY: str = '43800h'
 INTERMEDIATE_CA_SIGNING_CONFIG_FILE_NAME: str = 'intermediate-ca-config.json'
+LEAF_DEFAULT_KEY_ALGORITHM: str = 'rsa'
+LEAF_DEFAULT_KEY_SIZE: int = 2048
+LEAF_DEFAULT_EXPIRY: str = '8760h'
+LEAF_DEFAULT_USAGES: List[str] = \
+    ['signing',
+     'key encipherment',
+     'server auth',
+     'client auth']
+LEAF_SIGNING_CONFIG_FILE_NAME: str = 'leaf-config.json'
 
 
 # =============================================================================
@@ -129,7 +139,7 @@ def _create_intermediate_ca_signing_config(payload: dict) -> dict:
         'signing': {
             'profiles': {
                 'ca': {
-                    'expiry': '43800h',
+                    'expiry': INTERMEDIATE_CA_DEFAULT_EXPIRY,
                     'usages': [
                         'cert sign',
                         'crl sign'
@@ -182,6 +192,69 @@ def _create_intermediate_ca_signing_request(payload: dict) -> dict:
         signing_request['names'] = payload['params']['names']
     # log request for debugging
     log("intermediate ca signing request:")
+    log(json.dumps(signing_request, indent=4))
+    # return signing request
+    return signing_request
+
+
+# =============================================================================
+# _create_leaf_signing_config
+# =============================================================================
+def _create_leaf_signing_config(payload: dict) -> dict:
+    # create the base signing config
+    signing_config: dict = {
+        'signing': {
+            'profiles': {
+                'leaf': {
+                    'expiry': LEAF_DEFAULT_EXPIRY,
+                    'usages': LEAF_DEFAULT_USAGES
+                }
+            }
+        }
+    }
+    # set leaf properties from payload, if present
+    if 'leaf' in payload['params']:
+        # expiry
+        signing_config['signing']['profiles']['leaf']['expiry'] = \
+            payload['params']['leaf'].get(
+                'expiry', LEAF_DEFAULT_EXPIRY)
+        # usages
+        signing_config['signing']['profiles']['leaf']['usages'] = \
+            payload['params']['leaf'].get(
+                'usages', LEAF_DEFAULT_USAGES)
+    # log config for debugging
+    log("leaf signing config:")
+    log(json.dumps(signing_config, indent=4))
+    return signing_config
+
+
+# =============================================================================
+# _create_leaf_signing_request
+# =============================================================================
+def _create_leaf_signing_request(payload: dict) -> dict:
+    # create the base request
+    signing_request: dict = {
+        'key': {
+            'algo': LEAF_DEFAULT_KEY_ALGORITHM,
+            'size': LEAF_DEFAULT_KEY_SIZE
+        },
+        'names': []
+    }
+    # set key properties from payload, if present
+    if 'key' in payload['params']:
+        # key algorithm
+        signing_request['key']['algo'] = \
+            payload['params']['key'].get(
+                'algo', LEAF_DEFAULT_KEY_ALGORITHM)
+        # key size
+        signing_request['key']['size'] = \
+            payload['params']['key'].get(
+                'size', LEAF_DEFAULT_KEY_SIZE)
+    # set names from payload, if present
+    if 'names' in payload['params']:
+        signing_request['names'] = payload['params']['names']
+    # log request for debugging
+    log("leaf signing request:")
     log(json.dumps(signing_request, indent=4))
     # return signing request
     return signing_request
@@ -259,6 +332,65 @@ def create_intermediate_ca(
         '-loglevel=0',
         '-',
         input=json.dumps(intermediate_ca_signing_request))
+    # capture the output to file
+    _cfssljson('-bare',
+               os.path.join(repository_dir_path,
+                            file_prefix),
+               input=cfssl_output.stdout)
+
+
+# =============================================================================
+# create_leaf
+# =============================================================================
+def create_leaf(
+        payload: dict,
+        repository_dir_path: str,
+        file_prefix: str,
+        intermediate_ca_certificate_file_name: str,
+        intermediate_ca_private_key_file_name: str) -> None:
+    # create leaf signing request
+    leaf_signing_request = \
+        _create_leaf_signing_request(payload)
+    # create leaf signing config
+    leaf_signing_config = \
+        _create_leaf_signing_config(payload)
+    # write leaf signing config to file
+    leaf_signing_config_file_path = \
+        os.path.join(repository_dir_path,
+                     LEAF_SIGNING_CONFIG_FILE_NAME)
+    with open(leaf_signing_config_file_path, 'w') \
+            as signing_config_file:
+        json.dump(leaf_signing_config, signing_config_file)
+    # generate and sign the leaf
+    intermediate_ca_certificate_file_path = \
+        os.path.join(
+            repository_dir_path,
+            intermediate_ca_certificate_file_name)
+    intermediate_ca_private_key_file_path = \
+        os.path.join(
+            repository_dir_path,
+            intermediate_ca_private_key_file_name)
+    leaf_common_name = payload['params']['CN']
+    cfssl_gencert_args = [
+        f"-ca={intermediate_ca_certificate_file_path}",
+        f"-ca-key={intermediate_ca_private_key_file_path}",
+        f"-config={leaf_signing_config_file_path}",
+        '-profile=leaf',
+        f"-cn={leaf_common_name}"
+    ]
+    # add hosts arg, if present
+    # converts list to comma separated list
+    if 'leaf' in payload['params']:
+        if 'hosts' in payload['params']['leaf']:
+            cfssl_gencert_args.append(
+                '-hostname='
+                f"\"{','.join(payload['params']['leaf']['hosts'])}\"")
+    cfssl_output = _cfssl(
+        'gencert',
+        *cfssl_gencert_args,
+        '-loglevel=0',
+        '-',
+        input=json.dumps(leaf_signing_request))
     # capture the output to file
     _cfssljson('-bare',
                os.path.join(repository_dir_path,
