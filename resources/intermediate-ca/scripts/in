@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # local
-import lib.intermediate_ca
+import lib.concourse
 
 
 # =============================================================================
@@ -14,7 +14,7 @@ import lib.intermediate_ca
 # do_in
 # =============================================================================
 def do_in() -> None:
-    lib.intermediate_ca.do_in()
+    lib.concourse.intermediate_ca_in()
 
 
 # =============================================================================

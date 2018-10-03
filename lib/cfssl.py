@@ -14,24 +14,23 @@ from lib.log import log
 #
 # =============================================================================
 
-CFSSL_WORKSPACE_DIR_PATH = '/tmp/cfssl'
-CFSSL_BIN_FILE_PATH = '/root/go/bin/cfssl'
-CFSSLJSON_BIN_FILE_PATH = '/root/go/bin/cfssljson'
-ROOT_CA_DEFAULT_KEY_ALGORITHM = 'ecdsa'
-ROOT_CA_DEFAULT_KEY_SIZE = 256
-ROOT_CA_DEFAULT_EXPIRY = '87600h'
-INTERMEDIATE_CA_DEFAULT_KEY_ALGORITHM = 'ecdsa'
-INTERMEDIATE_CA_DEFAULT_KEY_SIZE = 256
-INTERMEDIATE_CA_DEFAULT_EXPIRY = '43800h'
-INTERMEDIATE_CA_SIGNING_CONFIG_FILE_NAME = 'intermediate-ca-config.json'
+CFSSL_WORKSPACE_DIR_PATH: str = '/tmp/cfssl'
+CFSSL_BIN_FILE_PATH: str = '/root/go/bin/cfssl'
+CFSSLJSON_BIN_FILE_PATH: str = '/root/go/bin/cfssljson'
+ROOT_CA_DEFAULT_KEY_ALGORITHM: str = 'rsa'
+ROOT_CA_DEFAULT_KEY_SIZE: int = 2048
+ROOT_CA_DEFAULT_EXPIRY: str = '87600h'
+INTERMEDIATE_CA_DEFAULT_KEY_ALGORITHM: str = 'rsa'
+INTERMEDIATE_CA_DEFAULT_KEY_SIZE: int = 2048
+INTERMEDIATE_CA_DEFAULT_EXPIRY: str = '43800h'
+INTERMEDIATE_CA_SIGNING_CONFIG_FILE_NAME: str = 'intermediate-ca-config.json'
 
 
 # =============================================================================
 #
-# functions
+# private exe functions
 #
 # =============================================================================
-
 
 # =============================================================================
 # _run
@@ -73,12 +72,18 @@ def _cfssljson(*args: str, input=None) -> subprocess.CompletedProcess:
 
 
 # =============================================================================
-# _create_root_ca_csr
+#
+# private pki functions
+#
 # =============================================================================
-def _create_root_ca_csr() -> dict:
+
+# =============================================================================
+# _create_root_ca_signing_request
+# =============================================================================
+def _create_root_ca_signing_request(payload: dict) -> dict:
     # create the base request
     signing_request: dict = {
-        'CN': lib.concourse.payload['params']['CN'],
+        'CN': payload['params']['CN'],
         'key': {
             'algo': ROOT_CA_DEFAULT_KEY_ALGORITHM,
             'size': ROOT_CA_DEFAULT_KEY_SIZE
@@ -90,24 +95,24 @@ def _create_root_ca_csr() -> dict:
         'names': []
     }
     # set key properties from payload, if present
-    if 'key' in lib.concourse.payload['params']:
+    if 'key' in payload['params']:
         # key algorithm
         signing_request['key']['algo'] = \
-            lib.concourse.payload['params']['key'].get(
+            payload['params']['key'].get(
                 'algo', ROOT_CA_DEFAULT_KEY_ALGORITHM)
         # key size
         signing_request['key']['size'] = \
-            lib.concourse.payload['params']['key'].get(
+            payload['params']['key'].get(
                 'size', ROOT_CA_DEFAULT_KEY_SIZE)
     # set ca properties from payload, if present
-    if 'ca' in lib.concourse.payload['params']:
+    if 'ca' in payload['params']:
         # expiry
         signing_request['ca']['expiry'] = \
-            lib.concourse.payload['params']['ca'].get(
+            payload['params']['ca'].get(
                 'expiry', ROOT_CA_DEFAULT_EXPIRY)
     # set names from payload, if present
-    if 'names' in lib.concourse.payload['params']:
-        signing_request['names'] = lib.concourse.payload['params']['names']
+    if 'names' in payload['params']:
+        signing_request['names'] = payload['params']['names']
     # log request for debugging
     log("root ca signing request:")
     log(json.dumps(signing_request, indent=4))
@@ -116,63 +121,9 @@ def _create_root_ca_csr() -> dict:
 
 
 # =============================================================================
-# create_root_ca
-# =============================================================================
-def create_root_ca(destination_dir_path,
-                   file_prefix) -> None:
-    # create root ca csr
-    root_ca_csr = _create_root_ca_csr()
-
-    # generate the root ca
-    cfssl_output = _cfssl('gencert',
-                          '-initca=true',
-                          '-loglevel=0',
-                          '-',
-                          input=json.dumps(root_ca_csr))
-
-    # capture the output to file
-    _cfssljson('-bare',
-               os.path.join(destination_dir_path,
-                            file_prefix),
-               input=cfssl_output.stdout)
-
-
-# =============================================================================
-# _create_intermediate_ca_csr
-# =============================================================================
-def _create_intermediate_ca_csr() -> dict:
-    # create the base request
-    signing_request: dict = {
-        'key': {
-            'algo': INTERMEDIATE_CA_DEFAULT_KEY_ALGORITHM,
-            'size': INTERMEDIATE_CA_DEFAULT_KEY_SIZE
-        },
-        'names': []
-    }
-    # set key properties from payload, if present
-    if 'key' in lib.concourse.payload['params']:
-        # key algorithm
-        signing_request['key']['algo'] = \
-            lib.concourse.payload['params']['key'].get(
-                'algo', INTERMEDIATE_CA_DEFAULT_KEY_ALGORITHM)
-        # key size
-        signing_request['key']['size'] = \
-            lib.concourse.payload['params']['key'].get(
-                'size', INTERMEDIATE_CA_DEFAULT_KEY_SIZE)
-    # set names from payload, if present
-    if 'names' in lib.concourse.payload['params']:
-        signing_request['names'] = lib.concourse.payload['params']['names']
-    # log request for debugging
-    log("intermediate ca signing request:")
-    log(json.dumps(signing_request, indent=4))
-    # return signing request
-    return signing_request
-
-
-# =============================================================================
 # _create_intermediate_ca_signing_config
 # =============================================================================
-def _create_intermediate_ca_signing_config() -> dict:
+def _create_intermediate_ca_signing_config(payload: dict) -> dict:
     # create the base signing config
     signing_config: dict = {
         'signing': {
@@ -193,10 +144,10 @@ def _create_intermediate_ca_signing_config() -> dict:
         }
     }
     # set ca properties from payload, if present
-    if 'ca' in lib.concourse.payload['params']:
+    if 'ca' in payload['params']:
         # expiry
         signing_config['signing']['profiles']['ca']['expiry'] = \
-            lib.concourse.payload['params']['ca'].get(
+            payload['params']['ca'].get(
                 'expiry', INTERMEDIATE_CA_DEFAULT_EXPIRY)
     # log config for debugging
     log("intermediate ca signing config:")
@@ -205,16 +156,82 @@ def _create_intermediate_ca_signing_config() -> dict:
 
 
 # =============================================================================
+# _create_intermediate_ca_signing_request
+# =============================================================================
+def _create_intermediate_ca_signing_request(payload: dict) -> dict:
+    # create the base request
+    signing_request: dict = {
+        'key': {
+            'algo': INTERMEDIATE_CA_DEFAULT_KEY_ALGORITHM,
+            'size': INTERMEDIATE_CA_DEFAULT_KEY_SIZE
+        },
+        'names': []
+    }
+    # set key properties from payload, if present
+    if 'key' in payload['params']:
+        # key algorithm
+        signing_request['key']['algo'] = \
+            payload['params']['key'].get(
+                'algo', INTERMEDIATE_CA_DEFAULT_KEY_ALGORITHM)
+        # key size
+        signing_request['key']['size'] = \
+            payload['params']['key'].get(
+                'size', INTERMEDIATE_CA_DEFAULT_KEY_SIZE)
+    # set names from payload, if present
+    if 'names' in payload['params']:
+        signing_request['names'] = payload['params']['names']
+    # log request for debugging
+    log("intermediate ca signing request:")
+    log(json.dumps(signing_request, indent=4))
+    # return signing request
+    return signing_request
+
+
+# =============================================================================
+#
+# public lifecycle functions
+#
+# =============================================================================
+
+# =============================================================================
+# create_root_ca
+# =============================================================================
+def create_root_ca(
+        payload: dict,
+        destination_dir_path: str,
+        file_prefix: str) -> None:
+    # create root ca signing request
+    root_ca_signing_request = _create_root_ca_signing_request(payload)
+
+    # generate the root ca
+    cfssl_output = _cfssl('gencert',
+                          '-initca=true',
+                          '-loglevel=0',
+                          '-',
+                          input=json.dumps(root_ca_signing_request))
+
+    # capture the output to file
+    _cfssljson('-bare',
+               os.path.join(destination_dir_path,
+                            file_prefix),
+               input=cfssl_output.stdout)
+
+
+# =============================================================================
 # create_intermediate_ca
 # =============================================================================
-def create_intermediate_ca(repository_dir_path,
-                           file_prefix,
-                           root_ca_certificate_file_name,
-                           root_ca_private_key_file_name) -> None:
-    # create intermediate ca csr
-    intermediate_ca_csr = _create_intermediate_ca_csr()
+def create_intermediate_ca(
+        payload: dict,
+        repository_dir_path: str,
+        file_prefix: str,
+        root_ca_certificate_file_name: str,
+        root_ca_private_key_file_name: str) -> None:
+    # create intermediate ca signing request
+    intermediate_ca_signing_request = \
+        _create_intermediate_ca_signing_request(payload)
     # create intermediate ca signing config
-    intermediate_ca_signing_config = _create_intermediate_ca_signing_config()
+    intermediate_ca_signing_config = \
+        _create_intermediate_ca_signing_config(payload)
     # write intermediate ca signing config to file
     intermediate_ca_signing_config_file_path = \
         os.path.join(repository_dir_path,
@@ -223,20 +240,25 @@ def create_intermediate_ca(repository_dir_path,
             as signing_config_file:
         json.dump(intermediate_ca_signing_config, signing_config_file)
     # generate and sign the intermediate ca
-    root_ca_certificate_file_path = os.path.join(repository_dir_path,
-                                                 root_ca_certificate_file_name)
-    root_ca_private_key_file_path = os.path.join(repository_dir_path,
-                                                 root_ca_private_key_file_name)
-    intermediate_ca_common_name = lib.concourse.payload['params']['CN']
-    cfssl_output = _cfssl('gencert',
-                          f"-ca={root_ca_certificate_file_path}",
-                          f"-ca-key={root_ca_private_key_file_path}",
-                          f"-config={intermediate_ca_signing_config_file_path}",
-                          '-profile=ca',
-                          f"-cn={intermediate_ca_common_name}"
-                          '-loglevel=0',
-                          '-',
-                          input=json.dumps(intermediate_ca_csr))
+    root_ca_certificate_file_path = \
+        os.path.join(
+            repository_dir_path,
+            root_ca_certificate_file_name)
+    root_ca_private_key_file_path = \
+        os.path.join(
+            repository_dir_path,
+            root_ca_private_key_file_name)
+    intermediate_ca_common_name = payload['params']['CN']
+    cfssl_output = _cfssl(
+        'gencert',
+        f"-ca={root_ca_certificate_file_path}",
+        f"-ca-key={root_ca_private_key_file_path}",
+        f"-config={intermediate_ca_signing_config_file_path}",
+        '-profile=ca',
+        f"-cn={intermediate_ca_common_name}"
+        '-loglevel=0',
+        '-',
+        input=json.dumps(intermediate_ca_signing_request))
     # capture the output to file
     _cfssljson('-bare',
                os.path.join(repository_dir_path,
