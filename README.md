@@ -194,7 +194,7 @@ creates and gets leaf using cfssl
 
 #### `in`: fetch leaf certificate, private key, and/or ca chain
 
-fetches the certificate, private key, and/or ca chain for a leaf
+fetches the leaf certificate, leaf private key, root ca certificate, and intermediate ca certificate
 
 the following files will be places in the destination, based on parameters:
 
@@ -202,7 +202,9 @@ the following files will be places in the destination, based on parameters:
 
 - `/<leaf_name>-key.pem`: the leaf private key file
 
-- `/ca-chain.pem`: the ca certificate chain file
+- `/root-ca.pem`: the root ca certificate file
+
+- `/intermediate-ca.pem`: the intermediate ca certificate file
 
 **parameters**
 
@@ -210,7 +212,9 @@ the following files will be places in the destination, based on parameters:
 
 - `save_private_key`: _optional_. save the private key file to disk. default: `false`
 
-- `save_ca_chain`: _optional_. save the ca certificate chain file to disk. default: `false`
+- `save_root_ca_certificate`: _optional_. save the root ca certificate file to disk. default: `false`
+
+- `save_intermediate_ca_certificate`: _optional_. save the intermediate ca certificate file to disk. default: `false`
 
 #### `out`: create leaf
 

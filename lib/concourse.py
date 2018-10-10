@@ -208,13 +208,6 @@ def _write_payload(payload: Any, stream=sys.stdout) -> None:
 
 
 # =============================================================================
-# _file_is_downloaded
-# =============================================================================
-def _file_is_downloaded(file_path: str) -> bool:
-    return os.path.isfile(file_path)
-
-
-# =============================================================================
 # _get_repository_file_path
 # =============================================================================
 def _get_repository_file_path(
@@ -245,6 +238,28 @@ def _should_download_certificate(payload: dict) -> bool:
 def _should_download_private_key(payload: dict) -> bool:
     if 'params' in payload:
         return payload['params'].get('save_private_key',
+                                     False) is True
+    else:
+        return False
+
+
+# =============================================================================
+# _should_download_root_ca_certificate
+# =============================================================================
+def _should_download_root_ca_certificate(payload: dict) -> bool:
+    if 'params' in payload:
+        return payload['params'].get('save_root_ca_certificate',
+                                     False) is True
+    else:
+        return False
+
+
+# =============================================================================
+# _should_download_intermediate_ca_certificate
+# =============================================================================
+def _should_download_intermediate_ca_certificate(payload: dict) -> bool:
+    if 'params' in payload:
+        return payload['params'].get('save_intermediate_ca_certificate',
                                      False) is True
     else:
         return False
@@ -282,7 +297,6 @@ def _checksum_exists(
 #
 # =============================================================================
 
-
 # =============================================================================
 # _create_check_payload
 # =============================================================================
@@ -293,30 +307,13 @@ def _create_check_payload(checksum: str) -> list:
 # =============================================================================
 # _create_in_payload
 # =============================================================================
-def _create_in_payload(
-        payload: dict,
-        certificate_file_name: str,
-        certificate_file_path: str,
-        certificate_checksum: str,
-        private_key_file_name: str,
-        private_key_file_path: str,
-        private_key_checksum: str) -> dict:
+def _create_in_payload(payload: dict) -> dict:
     in_payload: dict = {
         'version': {
             'checksum': payload['version']['checksum']
         },
         'metadata': []
     }
-    if _file_is_downloaded(certificate_file_path):
-        in_payload['metadata'].extend(
-            _create_certificate_metadata(
-                certificate_file_name,
-                certificate_checksum))
-    if _file_is_downloaded(private_key_file_path):
-        in_payload['metadata'].extend(
-            _create_private_key_metadata(
-                private_key_file_name,
-                private_key_checksum))
     return in_payload
 
 
@@ -325,11 +322,7 @@ def _create_in_payload(
 # =============================================================================
 def _create_out_payload(
     payload: dict,
-    checksum: str,
-    certificate_file_name: str,
-    certificate_checksum: str,
-    private_key_file_name: str,
-    private_key_checksum: str
+    checksum: str
 ) -> dict:
     out_payload: dict = {
         'version': {
@@ -337,49 +330,34 @@ def _create_out_payload(
         },
         'metadata': []
     }
-    out_payload['metadata'].extend(
-        _create_certificate_metadata(
-            certificate_file_name,
-            certificate_checksum))
-    out_payload['metadata'].extend(
-        _create_private_key_metadata(
-            private_key_file_name,
-            private_key_checksum))
     return out_payload
 
 
 # =============================================================================
-# _create_certificate_metadata
+# _create_file_metadata
 # =============================================================================
-def _create_certificate_metadata(
-        certificate_file_name: str,
-        certificate_checksum: str) -> list:
+def _create_file_metadata(
+        file_description: str,
+        file_name: str,
+        checksum: str):
     return [
         {
-            'name': 'certificate_file_name',
-            'value': certificate_file_name
+            'name': f"{file_description}_file_name",
+            'value': file_name
         },
         {
-            'name': 'certificate_checksum',
-            'value': certificate_checksum
+            'name': f"{file_description}_checksum",
+            'value': checksum
         }]
 
 
 # =============================================================================
-# _create_private_key_metadata
+# _update_payload_with_file_metadata
 # =============================================================================
-def _create_private_key_metadata(
-        private_key_file_name: str,
-        private_key_checksum: str) -> list:
-    return [
-        {
-            'name': 'private_key_file_name',
-            'value': private_key_file_name
-        },
-        {
-            'name': 'private_key_checksum',
-            'value': private_key_checksum
-        }]
+def _update_payload_with_file_metadata(
+        payload: dict,
+        file_metadata: list) -> None:
+    payload['metadata'].extend(file_metadata)
 
 
 # =============================================================================
@@ -492,34 +470,47 @@ def root_ca_in() -> None:
             repository_dir,
             ROOT_CA_PRIVATE_KEY_FILE_NAME)
 
+    # create output payload
+    output_payload = _create_in_payload(input_payload)
+
     # check for requested checksum
     # and download
     if _checksum_exists(
             input_payload,
             root_ca_checksum):
         if _should_download_certificate(input_payload):
+            # download file
             _download_s3_object_to_path(
                 root_ca_certificate,
                 root_ca_certificate_checksum,
                 root_ca_certificate_file_path)
+            # create file metadata
+            root_ca_certificate_file_metadata = _create_file_metadata(
+                "root_ca_certificate",
+                ROOT_CA_CERTIFICATE_FILE_NAME,
+                root_ca_certificate_checksum)
+            # update payload with file metadata
+            _update_payload_with_file_metadata(
+                output_payload,
+                root_ca_certificate_file_metadata)
         if _should_download_private_key(input_payload):
+            # download file
             _download_s3_object_to_path(
                 root_ca_private_key,
                 root_ca_private_key_checksum,
                 root_ca_private_key_file_path)
+            # create file metadata
+            root_ca_private_key_file_metadata = _create_file_metadata(
+                "root_ca_private_key",
+                ROOT_CA_PRIVATE_KEY_FILE_NAME,
+                root_ca_private_key_checksum)
+            # update payload with file metadata
+            _update_payload_with_file_metadata(
+                output_payload,
+                root_ca_private_key_file_metadata)
     else:
         # cannot continue if checksum is unavailable
         raise ValueError(f"requested checksum is unavailable")
-
-    # create output payload
-    output_payload = _create_in_payload(
-        input_payload,
-        ROOT_CA_CERTIFICATE_FILE_NAME,
-        root_ca_certificate_file_path,
-        root_ca_certificate_checksum,
-        ROOT_CA_PRIVATE_KEY_FILE_NAME,
-        root_ca_private_key_file_path,
-        root_ca_private_key_checksum)
 
     # write output
     _write_payload(output_payload)
@@ -595,11 +586,27 @@ def root_ca_out() -> None:
     # create output payload
     output_payload = _create_out_payload(
         input_payload,
-        root_ca_checksum,
+        root_ca_checksum)
+
+    # create certificate file metadata
+    root_ca_certificate_file_metadata = _create_file_metadata(
+        "root_ca_certificate",
         ROOT_CA_CERTIFICATE_FILE_NAME,
-        root_ca_certificate_checksum,
+        root_ca_certificate_checksum)
+
+    # create private key file metadata
+    root_ca_private_key_file_metadata = _create_file_metadata(
+        "root_ca_private_key",
         ROOT_CA_PRIVATE_KEY_FILE_NAME,
         root_ca_private_key_checksum)
+
+    # update output payload
+    _update_payload_with_file_metadata(
+        output_payload,
+        root_ca_certificate_file_metadata)
+    _update_payload_with_file_metadata(
+        output_payload,
+        root_ca_private_key_file_metadata)
 
     # write output
     _write_payload(output_payload)
@@ -706,34 +713,47 @@ def intermediate_ca_in() -> None:
             repository_dir,
             INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME)
 
+    # create output payload
+    output_payload = _create_in_payload(input_payload)
+
     # check for requested checksum
     # and download
     if _checksum_exists(
             input_payload,
             intermediate_ca_checksum):
         if _should_download_certificate(input_payload):
+            # download file
             _download_s3_object_to_path(
                 intermediate_ca_certificate,
                 intermediate_ca_certificate_checksum,
                 intermediate_ca_certificate_file_path)
+            # create file metadata
+            intermediate_ca_certificate_file_metadata = _create_file_metadata(
+                "intermediate_ca_certificate",
+                INTERMEDIATE_CA_CERTIFICATE_FILE_NAME,
+                intermediate_ca_certificate_checksum)
+            # update payload with file metadata
+            _update_payload_with_file_metadata(
+                output_payload,
+                intermediate_ca_certificate_file_metadata)
         if _should_download_private_key(input_payload):
+            # download file
             _download_s3_object_to_path(
                 intermediate_ca_private_key,
                 intermediate_ca_private_key_checksum,
                 intermediate_ca_private_key_file_path)
+            # create file metadata
+            intermediate_ca_private_key_file_metadata = _create_file_metadata(
+                "intermediate_ca_private_key",
+                INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME,
+                intermediate_ca_private_key_checksum)
+            # update payload with file metadata
+            _update_payload_with_file_metadata(
+                output_payload,
+                intermediate_ca_private_key_file_metadata)
     else:
         # cannot continue if checksum is unavailable
         raise ValueError(f"requested checksum is unavailable")
-
-    # create output payload
-    output_payload = _create_in_payload(
-        input_payload,
-        INTERMEDIATE_CA_CERTIFICATE_FILE_NAME,
-        intermediate_ca_certificate_file_path,
-        intermediate_ca_certificate_checksum,
-        INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME,
-        intermediate_ca_private_key_file_path,
-        intermediate_ca_private_key_checksum)
 
     # write output
     _write_payload(output_payload)
@@ -862,11 +882,27 @@ def intermediate_ca_out() -> None:
     # create output payload
     output_payload = _create_out_payload(
         input_payload,
-        intermediate_ca_checksum,
+        intermediate_ca_checksum)
+
+    # create certificate file metadata
+    intermediate_ca_certificate_file_metadata = _create_file_metadata(
+        "intermediate_ca_certificate",
         INTERMEDIATE_CA_CERTIFICATE_FILE_NAME,
-        intermediate_ca_certificate_checksum,
+        intermediate_ca_certificate_checksum)
+
+    # create private key file metadata
+    intermediate_ca_private_key_file_metadata = _create_file_metadata(
+        "intermediate_ca_private_key",
         INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME,
         intermediate_ca_private_key_checksum)
+
+    # update output payload
+    _update_payload_with_file_metadata(
+        output_payload,
+        intermediate_ca_certificate_file_metadata)
+    _update_payload_with_file_metadata(
+        output_payload,
+        intermediate_ca_private_key_file_metadata)
 
     # write output
     _write_payload(output_payload)
@@ -983,34 +1019,118 @@ def leaf_in() -> None:
             repository_dir,
             leaf_private_key_file_name)
 
+    # create output payload
+    output_payload = _create_in_payload(input_payload)
+
     # check for requested checksum
     # and download
     if _checksum_exists(
             input_payload,
             leaf_checksum):
         if _should_download_certificate(input_payload):
+            # download file
             _download_s3_object_to_path(
                 leaf_certificate,
                 leaf_certificate_checksum,
                 leaf_certificate_file_path)
+            # create file metadata
+            leaf_certificate_file_metadata = _create_file_metadata(
+                "leaf_certificate",
+                leaf_certificate_file_name,
+                leaf_certificate_checksum)
+            # update payload with file metadata
+            _update_payload_with_file_metadata(
+                output_payload,
+                leaf_certificate_file_metadata)
         if _should_download_private_key(input_payload):
+            # download file
             _download_s3_object_to_path(
                 leaf_private_key,
                 leaf_private_key_checksum,
                 leaf_private_key_file_path)
+            # create file metadata
+            leaf_private_key_file_metadata = _create_file_metadata(
+                "leaf_private_key",
+                leaf_private_key_file_name,
+                leaf_private_key_checksum)
+            # update payload with file metadata
+            _update_payload_with_file_metadata(
+                output_payload,
+                leaf_private_key_file_metadata)
+        if _should_download_root_ca_certificate(input_payload):
+            # create root ca certificate s3 object
+            root_ca_certificate = \
+                _get_s3_object(
+                    input_payload,
+                    s3_resource,
+                    ROOT_CA_CERTIFICATE_FILE_NAME)
+
+            # get remote root ca certificate checksum
+            root_ca_certificate_checksum = \
+                _get_s3_object_checksum(root_ca_certificate)
+
+            log('root ca certificate checksum: '
+                f"{root_ca_certificate_checksum}")
+
+            # get root ca certificate file path
+            root_ca_certificate_file_path = \
+                _get_repository_file_path(
+                    repository_dir,
+                    ROOT_CA_CERTIFICATE_FILE_NAME)
+
+            # download root ca certificate
+            _download_s3_object_to_path(
+                root_ca_certificate,
+                root_ca_certificate_checksum,
+                root_ca_certificate_file_path)
+            # create root ca certificate file metadata
+            root_ca_certificate_file_metadata = _create_file_metadata(
+                "root_ca_certificate",
+                ROOT_CA_CERTIFICATE_FILE_NAME,
+                root_ca_certificate_checksum)
+            # update payload with root ca certificate file metadata
+            _update_payload_with_file_metadata(
+                output_payload,
+                root_ca_certificate_file_metadata)
+        if _should_download_intermediate_ca_certificate(input_payload):
+            # create intermediate ca certificate s3 object
+            intermediate_ca_certificate = \
+                _get_s3_object(
+                    input_payload,
+                    s3_resource,
+                    ROOT_CA_CERTIFICATE_FILE_NAME)
+
+            # get remote intermediate ca certificate checksum
+            intermediate_ca_certificate_checksum = \
+                _get_s3_object_checksum(intermediate_ca_certificate)
+
+            log('intermediate ca certificate checksum: '
+                f"{intermediate_ca_certificate_checksum}")
+
+            # get intermediate ca certificate file path
+            intermediate_ca_certificate_file_path = \
+                _get_repository_file_path(
+                    repository_dir,
+                    ROOT_CA_CERTIFICATE_FILE_NAME)
+
+            # download intermediate ca certificate
+            _download_s3_object_to_path(
+                intermediate_ca_certificate,
+                intermediate_ca_certificate_checksum,
+                intermediate_ca_certificate_file_path)
+            # create intermediate ca certificate file metadata
+            intermediate_ca_certificate_file_metadata = _create_file_metadata(
+                "intermediate_ca_certificate",
+                INTERMEDIATE_CA_CERTIFICATE_FILE_NAME,
+                intermediate_ca_certificate_checksum)
+            # update payload with intermediate ca certificate file metadata
+            _update_payload_with_file_metadata(
+                output_payload,
+                intermediate_ca_certificate_file_metadata)
+
     else:
         # cannot continue if checksum is unavailable
         raise ValueError(f"requested checksum is unavailable")
-
-    # create output payload
-    output_payload = _create_in_payload(
-        input_payload,
-        leaf_certificate_file_name,
-        leaf_certificate_file_path,
-        leaf_certificate_checksum,
-        leaf_private_key_file_name,
-        leaf_private_key_file_path,
-        leaf_private_key_checksum)
 
     # write output
     _write_payload(output_payload)
@@ -1144,11 +1264,27 @@ def leaf_out() -> None:
     # create output payload
     output_payload = _create_out_payload(
         input_payload,
-        leaf_checksum,
+        leaf_checksum)
+
+    # create certificate file metadata
+    leaf_certificate_file_metadata = _create_file_metadata(
+        "leaf_certificate",
         leaf_certificate_file_name,
-        leaf_certificate_checksum,
+        leaf_certificate_checksum)
+
+    # create private key file metadata
+    leaf_private_key_file_metadata = _create_file_metadata(
+        "leaf_private_key",
         leaf_private_key_file_name,
         leaf_private_key_checksum)
+
+    # update output payload
+    _update_payload_with_file_metadata(
+        output_payload,
+        leaf_certificate_file_metadata)
+    _update_payload_with_file_metadata(
+        output_payload,
+        leaf_private_key_file_metadata)
 
     # write output
     _write_payload(output_payload)
