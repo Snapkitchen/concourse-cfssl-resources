@@ -1,16 +1,59 @@
 # concourse-cfssl-resources
 
+## table of contents
+
+- [baseline](#concourse-cfssl-baseline)
+
+- [root ca resource](#concourse-cfssl-root-ca-resource)
+	- [source configuration](#source-configuration)
+	- [behavior](#behavior)
+		- [check](#check-check-for-root-ca)
+		- [in](#in-fetch-root-ca-certificate-and-private-key)
+		- [out](#out-create-root-ca)
+	- [examples](#examples)
+		- [define resource](#define-resource)
+		- [get keypair](#get-keypair)
+		- [create keypair](#create-keypair)
+
+- [intermediate ca resource](#concourse-cfssl-intermediate-ca-resource)
+	- [source configuration](#source-configuration-1)
+	- [behavior](#behavior-1)
+		- [check](#check-check-for-intermediate-ca)
+		- [in](#in-fetch-intermediate-ca-certificate-and-private-key)
+		- [out](#out-create-intermediate-ca)
+	- [examples](#examples-1)
+		- [define resource](#define-resource-1)
+		- [get keypair](#get-keypair-1)
+		- [create keypair](#create-keypair-1)
+
+- [leaf resource](#concourse-cfssl-leaf-resource)
+	- [source configuration](#source-configuration-2)
+	- [behavior](#behavior-2)
+		- [check](#check-check-for-leaf)
+		- [in](#in-fetch-leaf-certificate-private-key-and-parent-certificates)
+		- [out](#out-create-leaf)
+	- [examples](#examples-2)
+		- [define resource](#define-resource-2)
+		- [get keypair](#get-keypair-2)
+		- [get keypair and parent certificates](#get-keypair-and-parent-certificates)
+		- [create keypair](#create-keypair-2)
+
+- [development](#development)
+
+- [building](#building)
+
+- [license](#license)
+
 ## concourse-cfssl-baseline
 
 baseline for each concourse cfssl resource
 
 includes:
 
-- bash (4.4.19)
 - git (2.18.0)
 - go (1.10.1)
 - python3 (3.6.6)
-- cfssl
+- cfssl (latest)
 
 also includes pip packages in [requirements.txt](requirements.txt)
 
@@ -88,6 +131,59 @@ see cfssl documentation for best practices and examples
 
 	- `ST`: _optional_. state
 
+### examples
+
+#### define resource
+
+```
+---
+resource_types:
+- name: cfssl-root-ca
+  type: docker-image
+  source:
+    repository: snapkitchen/concourse-cfssl-root-ca-resource
+    tag: latest
+
+resources:
+- name: my-root-ca
+  type: cfssl-root-ca
+  source:
+    bucket_name: ((bucket_name))
+    access_key_id: ((access_key_id))
+    secret_access_key: ((secret_access_key))
+    region_name: ((region_name))
+    prefix: ((prefix))
+```
+
+#### get keypair
+
+```
+jobs:
+- name: get-root-ca-keypair
+  plan:
+  - get: my-root-ca
+    params:
+      save_certificate: true
+      save_private_key: true
+```
+
+#### create keypair
+
+```
+jobs:
+- name: create-root-ca-keypair
+  plan:
+  - put: my-root-ca
+    params:
+      CN: RootCA
+      names:
+      - C: US
+        L: Austin
+        O: EXAMPLE
+        OU: DevOps
+        ST: Texas
+```
+
 ## concourse-cfssl-intermediate-ca-resource
 
 creates and gets intermediate ca using cfssl
@@ -164,6 +260,59 @@ see cfssl documentation for best practices and examples
 
 	- `ST`: _optional_. state
 
+### examples
+
+#### define resource
+
+```
+---
+resource_types:
+- name: cfssl-intermediate-ca
+  type: docker-image
+  source:
+    repository: snapkitchen/concourse-cfssl-intermediate-ca-resource
+    tag: latest
+
+resources:
+- name: my-intermediate-ca
+  type: cfssl-intermediate-ca
+  source:
+    bucket_name: ((bucket_name))
+    access_key_id: ((access_key_id))
+    secret_access_key: ((secret_access_key))
+    region_name: ((region_name))
+    prefix: ((prefix))
+```
+
+#### get keypair
+
+```
+jobs:
+- name: get-intermediate-ca-keypair
+  plan:
+  - get: my-intermediate-ca
+    params:
+      save_certificate: true
+      save_private_key: true
+```
+
+#### create keypair
+
+```
+jobs:
+- name: create-intermediate-ca-keypair
+  plan:
+  - put: my-intermediate-ca
+    params:
+      CN: IntermediateCA
+      names:
+      - C: US
+        L: Austin
+        O: EXAMPLE
+        OU: DevOps
+        ST: Texas
+```
+
 ## concourse-cfssl-leaf-resource
 
 creates and gets leaf using cfssl
@@ -192,7 +341,7 @@ creates and gets leaf using cfssl
 
 #### `check`: check for leaf
 
-#### `in`: fetch leaf certificate, private key, and/or ca chain
+#### `in`: fetch leaf certificate, private key, and parent certificates
 
 fetches the leaf certificate, leaf private key, root ca certificate, and intermediate ca certificate
 
@@ -262,6 +411,84 @@ see cfssl documentation for best practices and examples
 	- `OU`: _optional_. organizational unit
 
 	- `ST`: _optional_. state
+
+### examples
+
+#### define resource
+
+```
+---
+resource_types:
+- name: cfssl-leaf
+  type: docker-image
+  source:
+    repository: snapkitchen/concourse-cfssl-leaf-resource
+    tag: latest
+
+resources:
+- name: server-leaf
+  type: cfssl-leaf
+  source:
+    leaf_name: server
+    bucket_name: ((bucket_name))
+    access_key_id: ((access_key_id))
+    secret_access_key: ((secret_access_key))
+    region_name: ((region_name))
+    prefix: ((prefix))
+```
+
+#### get keypair
+
+```
+jobs:
+- name: get-server-leaf-keypair
+  plan:
+  - get: server-leaf
+    params:
+      save_certificate: true
+      save_private_key: true
+```
+
+#### get keypair and parent certificates
+
+```
+jobs:
+- name: get-server-leaf-keypair-and-parents
+  plan:
+  - get: server-leaf
+    params:
+      save_certificate: true
+      save_private_key: true
+      save_root_ca_certificate: true
+      save_intermediate_ca_certificate: true
+```
+
+#### create keypair
+
+```
+jobs:
+- name: create-server-leaf-keypair
+  plan:
+  - put: server-leaf
+    params:
+      CN: server
+      leaf:
+        expiry: 26280h
+        hosts:
+        - server.node.local.consul
+        - localhost
+        - 127.0.0.1
+        usages:
+        - signing
+        - key encipherment
+        - server auth
+      names:
+      - C: US
+        L: Austin
+        O: EXAMPLE
+        OU: DevOps
+        ST: Texas
+```
 
 ## development
 
