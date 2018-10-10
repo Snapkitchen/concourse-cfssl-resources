@@ -52,7 +52,7 @@ includes:
 
 - git (2.18.0)
 - go (1.10.1)
-- python3 (3.6.6)
+- python3 (3.7)
 - cfssl (latest)
 
 also includes pip packages in [requirements.txt](requirements.txt)

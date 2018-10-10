@@ -2,12 +2,32 @@
 import json
 import os
 import subprocess
+from datetime import datetime
 from typing import List
 
 # local
 import lib.concourse
 from lib.log import log
 
+#
+# renew root:
+#
+
+# cfssl gencert -renewca -ca root-ca.pem -ca-key root-ca-key.pem | cfssljson -bare root-ca
+
+#
+# renew intermediate:
+#
+
+# cfssl gencsr -key intermediate-ca-key.pem -cert intermediate-ca.pem | cfssljson -bare intermediate-ca
+# cfssl sign -ca root-ca.pem -ca-key root-ca-key.pem -config config.json -profile ca intermediate-ca.csr | cfssljson -bare intermediate-ca
+
+#
+# renew leaf:
+#
+
+# cfssl gencsr -key server-key.pem -cert server.pem | cfssljson -bare server
+# cfssl sign -ca intermediate-ca.pem -ca-key intermediate-ca-key.pem -config config.json -profile leaf server.csr | cfssljson -bare server
 
 # =============================================================================
 #
@@ -15,6 +35,7 @@ from lib.log import log
 #
 # =============================================================================
 
+CFSSL_DATETIME_FORMAT: str = '%Y-%m-%dT%H:%M:%S%z'
 CFSSL_WORKSPACE_DIR_PATH: str = '/tmp/cfssl'
 CFSSL_BIN_FILE_PATH: str = '/root/go/bin/cfssl'
 CFSSLJSON_BIN_FILE_PATH: str = '/root/go/bin/cfssljson'
@@ -47,8 +68,7 @@ LEAF_SIGNING_CONFIG_FILE_NAME: str = 'leaf-config.json'
 # =============================================================================
 def _run(bin: str, *args: str, input=None) -> subprocess.CompletedProcess:
     command_output = subprocess.run([bin] + list(args),
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE,
+                                    capture_output=True,
                                     encoding='utf-8',
                                     input=input)
     # log stderr if present
@@ -258,6 +278,43 @@ def _create_leaf_signing_request(payload: dict) -> dict:
     log(json.dumps(signing_request, indent=4))
     # return signing request
     return signing_request
+
+
+# =============================================================================
+#
+# public utility functions
+#
+# =============================================================================
+
+# =============================================================================
+# get_certificate_info
+# =============================================================================
+def get_certificate_info(
+        certificate_file_path: str) -> dict:
+    # get certinfo json
+    certinfo_output = _cfssl('certinfo', '-cert', certificate_file_path)
+    # return parsed json
+    return json.loads(certinfo_output.stdout)
+
+
+# =============================================================================
+# get_certificate_issue_date
+# =============================================================================
+def get_certificate_issue_date(
+        certificate_info: dict) -> datetime:
+    return datetime.strptime(
+        certificate_info['not_before'],
+        CFSSL_DATETIME_FORMAT)
+
+
+# =============================================================================
+# get_certificate_expiration_date
+# =============================================================================
+def get_certificate_expiration_date(
+        certificate_info: dict) -> datetime:
+    return datetime.strptime(
+        certificate_info['not_after'],
+        CFSSL_DATETIME_FORMAT)
 
 
 # =============================================================================
