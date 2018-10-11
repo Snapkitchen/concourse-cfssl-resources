@@ -2,7 +2,7 @@
 import json
 import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List
 
 # local
@@ -318,6 +318,14 @@ def get_certificate_expiration_date(
 
 
 # =============================================================================
+# get_duration_until_certificate_expiration
+# =============================================================================
+def get_duration_until_certificate_expiration(
+        certificate_expiration_date: datetime) -> timedelta:
+    return certificate_expiration_date - datetime.now(timezone.utc)
+
+
+# =============================================================================
 #
 # public lifecycle functions
 #
@@ -448,6 +456,39 @@ def create_leaf(
         '-loglevel=0',
         '-',
         input=json.dumps(leaf_signing_request))
+    # capture the output to file
+    _cfssljson('-bare',
+               os.path.join(repository_dir_path,
+                            file_prefix),
+               input=cfssl_output.stdout)
+
+
+# =============================================================================
+# renew_root_certificate
+# =============================================================================
+def renew_root_certificate(
+    repository_dir_path: str,
+    file_prefix: str,
+    root_ca_certificate_file_name: str,
+    root_ca_private_key_file_name: str
+) -> None:
+    # determine file paths
+    root_ca_certificate_file_path = \
+        os.path.join(repository_dir_path,
+                     root_ca_certificate_file_name)
+    root_ca_private_key_file_path = \
+        os.path.join(repository_dir_path,
+                     root_ca_private_key_file_name)
+    # renew the ca certificate using the
+    # existing certificate and private key
+    cfssl_output = _cfssl(
+        'gencert',
+        '-renewca',
+        '-ca',
+        root_ca_certificate_file_path,
+        '-ca-key',
+        root_ca_private_key_file_path,
+        '-loglevel=0')
     # capture the output to file
     _cfssljson('-bare',
                os.path.join(repository_dir_path,

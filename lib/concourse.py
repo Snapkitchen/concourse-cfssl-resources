@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import sys
+from datetime import timedelta
 from typing import Any, Optional
 
 # pip
@@ -266,6 +267,26 @@ def _should_download_intermediate_ca_certificate(payload: dict) -> bool:
 
 
 # =============================================================================
+# _action_is_create
+# =============================================================================
+def _action_is_create(payload: dict) -> bool:
+    if 'params' in payload and 'action' in payload['params']:
+        return payload['params']['action'] == 'create'
+    else:
+        return True
+
+
+# =============================================================================
+# _action_is_renew
+# =============================================================================
+def _action_is_renew(payload: dict) -> bool:
+    if 'params' in payload and 'action' in payload['params']:
+        return payload['params']['action'] == 'renew'
+    else:
+        return False
+
+
+# =============================================================================
 #
 # private checksum functions
 #
@@ -352,12 +373,25 @@ def _create_file_metadata(
 
 
 # =============================================================================
-# _update_payload_with_file_metadata
+# _create_expiration_metadata
 # =============================================================================
-def _update_payload_with_file_metadata(
+def _create_expiration_metadata(
+        file_description: str,
+        time_until_expiration: timedelta):
+    return [
+        {
+            'name': f"{file_description}_time_until_expiration",
+            'value': str(time_until_expiration)
+        }]
+
+
+# =============================================================================
+# _update_payload_with_metadata
+# =============================================================================
+def _update_payload_with_metadata(
         payload: dict,
-        file_metadata: list) -> None:
-    payload['metadata'].extend(file_metadata)
+        metadata: list) -> None:
+    payload['metadata'].extend(metadata)
 
 
 # =============================================================================
@@ -490,7 +524,7 @@ def root_ca_in() -> None:
                 ROOT_CA_CERTIFICATE_FILE_NAME,
                 root_ca_certificate_checksum)
             # update payload with file metadata
-            _update_payload_with_file_metadata(
+            _update_payload_with_metadata(
                 output_payload,
                 root_ca_certificate_file_metadata)
         if _should_download_private_key(input_payload):
@@ -505,12 +539,12 @@ def root_ca_in() -> None:
                 ROOT_CA_PRIVATE_KEY_FILE_NAME,
                 root_ca_private_key_checksum)
             # update payload with file metadata
-            _update_payload_with_file_metadata(
+            _update_payload_with_metadata(
                 output_payload,
                 root_ca_private_key_file_metadata)
     else:
         # cannot continue if checksum is unavailable
-        raise ValueError(f"requested checksum is unavailable")
+        raise ValueError('requested checksum is unavailable')
 
     # write output
     _write_payload(output_payload)
@@ -538,12 +572,6 @@ def root_ca_out() -> None:
             s3_resource,
             ROOT_CA_PRIVATE_KEY_FILE_NAME)
 
-    # create root ca key pair
-    lib.cfssl.create_root_ca(
-        input_payload,
-        repository_dir,
-        ROOT_CA_FILE_PREFIX)
-
     # get file paths
     root_ca_certificate_file_path = \
         _get_repository_file_path(
@@ -554,6 +582,67 @@ def root_ca_out() -> None:
             repository_dir,
             ROOT_CA_PRIVATE_KEY_FILE_NAME)
 
+    # check action
+    if _action_is_create(input_payload):
+        # create root ca key pair
+        lib.cfssl.create_root_ca(
+            input_payload,
+            repository_dir,
+            ROOT_CA_FILE_PREFIX)
+    elif _action_is_renew(input_payload):
+        # get remote checksums
+        root_ca_certificate_checksum = \
+            _get_s3_object_checksum(root_ca_certificate)
+        root_ca_private_key_checksum = \
+            _get_s3_object_checksum(root_ca_private_key)
+
+        log('initial root ca certificate checksum: '
+            f"{root_ca_certificate_checksum}")
+        log('initial root ca private key checksum: '
+            f"{root_ca_private_key_checksum}")
+
+        # download keypair
+        _download_s3_object_to_path(
+            root_ca_certificate,
+            root_ca_certificate_checksum,
+            root_ca_certificate_file_path)
+        _download_s3_object_to_path(
+            root_ca_private_key,
+            root_ca_private_key_checksum,
+            root_ca_private_key_file_path)
+
+        # get current issue and expiration dates from certificate info
+        root_ca_certificate_initial_info = \
+            lib.cfssl.get_certificate_info(root_ca_certificate_file_path)
+        root_ca_certificate_initial_issue_date = \
+            lib.cfssl.get_certificate_issue_date(
+                root_ca_certificate_initial_info)
+        root_ca_certificate_initial_expiration_date = \
+            lib.cfssl.get_certificate_expiration_date(
+                root_ca_certificate_initial_info)
+
+        log('initial root ca certificate issue date: '
+            f"{root_ca_certificate_initial_issue_date}")
+        log('initial root ca certificate expiration date: '
+            f"{root_ca_certificate_initial_expiration_date}")
+
+        # get time until expiration of current certificate
+        root_ca_certificate_initial_time_until_expiration = \
+            lib.cfssl.get_duration_until_certificate_expiration(
+                root_ca_certificate_initial_expiration_date)
+
+        log('initial root ca certificate time until expiration: '
+            f"{root_ca_certificate_initial_time_until_expiration}")
+
+        # renew certificate
+        lib.cfssl.renew_root_certificate(
+            repository_dir,
+            ROOT_CA_FILE_PREFIX,
+            ROOT_CA_CERTIFICATE_FILE_NAME,
+            ROOT_CA_PRIVATE_KEY_FILE_NAME)
+    else:
+        raise ValueError("action must be 'create' or 'renew'")
+
     # get local checksums
     root_ca_certificate_checksum = \
         _hash_file(root_ca_certificate_file_path)
@@ -562,6 +651,29 @@ def root_ca_out() -> None:
 
     log(f"root ca certificate checksum: {root_ca_certificate_checksum}")
     log(f"root ca private key checksum: {root_ca_private_key_checksum}")
+
+    # get issue and expiration dates from certificate info
+    root_ca_certificate_info = \
+        lib.cfssl.get_certificate_info(root_ca_certificate_file_path)
+    root_ca_certificate_issue_date = \
+        lib.cfssl.get_certificate_issue_date(
+            root_ca_certificate_info)
+    root_ca_certificate_expiration_date = \
+        lib.cfssl.get_certificate_expiration_date(
+            root_ca_certificate_info)
+
+    log('root ca certificate issue date: '
+        f"{root_ca_certificate_issue_date}")
+    log('root ca certificate expiration date: '
+        f"{root_ca_certificate_expiration_date}")
+
+    # get time until expiration of certificate
+    root_ca_certificate_time_until_expiration = \
+        lib.cfssl.get_duration_until_certificate_expiration(
+            root_ca_certificate_expiration_date)
+
+    log('root ca certificate time until expiration: '
+        f"{root_ca_certificate_time_until_expiration}")
 
     # get local checksum
     root_ca_checksum = \
@@ -600,13 +712,21 @@ def root_ca_out() -> None:
         ROOT_CA_PRIVATE_KEY_FILE_NAME,
         root_ca_private_key_checksum)
 
+    # create certificate expiration metadata
+    root_ca_certificate_expiration_metadata = _create_expiration_metadata(
+        "root_ca_certificate",
+        root_ca_certificate_time_until_expiration)
+
     # update output payload
-    _update_payload_with_file_metadata(
+    _update_payload_with_metadata(
         output_payload,
         root_ca_certificate_file_metadata)
-    _update_payload_with_file_metadata(
+    _update_payload_with_metadata(
         output_payload,
         root_ca_private_key_file_metadata)
+    _update_payload_with_metadata(
+        output_payload,
+        root_ca_certificate_expiration_metadata)
 
     # write output
     _write_payload(output_payload)
@@ -733,7 +853,7 @@ def intermediate_ca_in() -> None:
                 INTERMEDIATE_CA_CERTIFICATE_FILE_NAME,
                 intermediate_ca_certificate_checksum)
             # update payload with file metadata
-            _update_payload_with_file_metadata(
+            _update_payload_with_metadata(
                 output_payload,
                 intermediate_ca_certificate_file_metadata)
         if _should_download_private_key(input_payload):
@@ -748,12 +868,12 @@ def intermediate_ca_in() -> None:
                 INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME,
                 intermediate_ca_private_key_checksum)
             # update payload with file metadata
-            _update_payload_with_file_metadata(
+            _update_payload_with_metadata(
                 output_payload,
                 intermediate_ca_private_key_file_metadata)
     else:
         # cannot continue if checksum is unavailable
-        raise ValueError(f"requested checksum is unavailable")
+        raise ValueError('requested checksum is unavailable')
 
     # write output
     _write_payload(output_payload)
@@ -897,10 +1017,10 @@ def intermediate_ca_out() -> None:
         intermediate_ca_private_key_checksum)
 
     # update output payload
-    _update_payload_with_file_metadata(
+    _update_payload_with_metadata(
         output_payload,
         intermediate_ca_certificate_file_metadata)
-    _update_payload_with_file_metadata(
+    _update_payload_with_metadata(
         output_payload,
         intermediate_ca_private_key_file_metadata)
 
@@ -1039,7 +1159,7 @@ def leaf_in() -> None:
                 leaf_certificate_file_name,
                 leaf_certificate_checksum)
             # update payload with file metadata
-            _update_payload_with_file_metadata(
+            _update_payload_with_metadata(
                 output_payload,
                 leaf_certificate_file_metadata)
         if _should_download_private_key(input_payload):
@@ -1054,7 +1174,7 @@ def leaf_in() -> None:
                 leaf_private_key_file_name,
                 leaf_private_key_checksum)
             # update payload with file metadata
-            _update_payload_with_file_metadata(
+            _update_payload_with_metadata(
                 output_payload,
                 leaf_private_key_file_metadata)
         if _should_download_root_ca_certificate(input_payload):
@@ -1089,7 +1209,7 @@ def leaf_in() -> None:
                 ROOT_CA_CERTIFICATE_FILE_NAME,
                 root_ca_certificate_checksum)
             # update payload with root ca certificate file metadata
-            _update_payload_with_file_metadata(
+            _update_payload_with_metadata(
                 output_payload,
                 root_ca_certificate_file_metadata)
         if _should_download_intermediate_ca_certificate(input_payload):
@@ -1124,13 +1244,13 @@ def leaf_in() -> None:
                 INTERMEDIATE_CA_CERTIFICATE_FILE_NAME,
                 intermediate_ca_certificate_checksum)
             # update payload with intermediate ca certificate file metadata
-            _update_payload_with_file_metadata(
+            _update_payload_with_metadata(
                 output_payload,
                 intermediate_ca_certificate_file_metadata)
 
     else:
         # cannot continue if checksum is unavailable
-        raise ValueError(f"requested checksum is unavailable")
+        raise ValueError('requested checksum is unavailable')
 
     # write output
     _write_payload(output_payload)
@@ -1279,10 +1399,10 @@ def leaf_out() -> None:
         leaf_private_key_checksum)
 
     # update output payload
-    _update_payload_with_file_metadata(
+    _update_payload_with_metadata(
         output_payload,
         leaf_certificate_file_metadata)
-    _update_payload_with_file_metadata(
+    _update_payload_with_metadata(
         output_payload,
         leaf_private_key_file_metadata)
 

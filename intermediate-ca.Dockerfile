@@ -1,4 +1,4 @@
-FROM snapkitchen/concourse-cfssl-baseline
+FROM snapkitchen/concourse-cfssl-baseline:latest
 
 COPY resources/intermediate-ca/scripts/check \
     resources/intermediate-ca/scripts/in \

@@ -9,11 +9,12 @@
 	- [behavior](#behavior)
 		- [check](#check-check-for-root-ca)
 		- [in](#in-fetch-root-ca-certificate-and-private-key)
-		- [out](#out-create-root-ca)
+		- [out](#out-create-or-renew-root-ca)
 	- [examples](#examples)
 		- [define resource](#define-resource)
 		- [get keypair](#get-keypair)
 		- [create keypair](#create-keypair)
+		- [renew certificate](#renew-certificate)
 
 - [intermediate ca resource](#concourse-cfssl-intermediate-ca-resource)
 	- [source configuration](#source-configuration-1)
@@ -97,7 +98,7 @@ the following files will be places in the destination, based on parameters:
 
 - `save_private_key`: _optional_. save the private key file to disk. default: `false`
 
-#### `out`: create root ca
+#### `out`: create or renew root ca
 
 creates a new root ca certificate and private key
 
@@ -105,7 +106,11 @@ note: parameters are mostly 1:1 analogous to their cfssl counterparts
 
 see cfssl documentation for best practices and examples
 
-**parameters**
+**common parameters**
+
+- `action`: _optional_. the operation to perform, either `create` or `renew`. default: `create`
+
+**create parameters**
 
 - `CN`: _required_. the certificate common name
 
@@ -182,6 +187,17 @@ jobs:
         O: EXAMPLE
         OU: DevOps
         ST: Texas
+```
+
+#### renew certificate
+
+```
+jobs:
+- name: renew-root-ca-certificate
+  plan:
+  - put: my-root-ca
+    params:
+      action: renew
 ```
 
 ## concourse-cfssl-intermediate-ca-resource

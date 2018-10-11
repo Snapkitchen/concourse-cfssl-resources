@@ -1,4 +1,4 @@
-FROM snapkitchen/concourse-cfssl-baseline
+FROM snapkitchen/concourse-cfssl-baseline:latest
 
 COPY resources/leaf/scripts/check \
     resources/leaf/scripts/in \

@@ -12,4 +12,4 @@ COPY requirements.txt /app/requirements.txt
 
 RUN pip3 --no-cache-dir install -r /app/requirements.txt
 
-ENTRYPOINT ["/bin/bash"]
+ENTRYPOINT ["/bin/sh"]
