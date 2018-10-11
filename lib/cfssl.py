@@ -3,7 +3,7 @@ import json
 import os
 import subprocess
 from datetime import datetime, timedelta, timezone
-from typing import List
+from typing import List, Optional
 
 # local
 import lib.concourse
@@ -298,6 +298,22 @@ def get_certificate_info(
 
 
 # =============================================================================
+# get_certificate_common_name
+# =============================================================================
+def get_certificate_common_name(
+        certificate_info: dict) -> str:
+    return certificate_info['subject']['common_name']
+
+
+# =============================================================================
+# get_certificate_hosts
+# =============================================================================
+def get_certificate_hosts(
+        certificate_info: dict) -> Optional[List[str]]:
+    return certificate_info.get('sans')
+
+
+# =============================================================================
 # get_certificate_issue_date
 # =============================================================================
 def get_certificate_issue_date(
@@ -393,7 +409,7 @@ def create_intermediate_ca(
         f"-ca-key={root_ca_private_key_file_path}",
         f"-config={intermediate_ca_signing_config_file_path}",
         '-profile=ca',
-        f"-cn={intermediate_ca_common_name}"
+        f"-cn={intermediate_ca_common_name}",
         '-loglevel=0',
         '-',
         input=json.dumps(intermediate_ca_signing_request))
@@ -449,7 +465,7 @@ def create_leaf(
         if 'hosts' in payload['params']['leaf']:
             cfssl_gencert_args.append(
                 '-hostname='
-                f"\"{','.join(payload['params']['leaf']['hosts'])}\"")
+                f"{','.join(payload['params']['leaf']['hosts'])}")
     cfssl_output = _cfssl(
         'gencert',
         *cfssl_gencert_args,
@@ -564,6 +580,88 @@ def renew_intermediate_certificate(
         '-profile=ca',
         '-loglevel=0',
         intermediate_ca_signing_request_file_path)
+    # capture the output to file
+    _cfssljson('-bare',
+               os.path.join(repository_dir_path,
+                            file_prefix),
+               input=cfssl_output.stdout)
+
+
+# =============================================================================
+# renew_leaf_certificate
+# =============================================================================
+# cfssl gencsr -key server-key.pem -cert server.pem | cfssljson -bare server
+# cfssl sign -ca intermediate-ca.pem -ca-key intermediate-ca-key.pem -config config.json -profile leaf server.csr | cfssljson -bare server
+def renew_leaf_certificate(
+    payload: dict,
+    repository_dir_path: str,
+    file_prefix: str,
+    intermediate_ca_certificate_file_name: str,
+    intermediate_ca_private_key_file_name: str,
+    leaf_certificate_file_name: str,
+    leaf_private_key_file_name: str
+) -> None:
+    # determine file paths
+    intermediate_ca_certificate_file_path = \
+        os.path.join(repository_dir_path,
+                     intermediate_ca_certificate_file_name)
+    intermediate_ca_private_key_file_path = \
+        os.path.join(repository_dir_path,
+                     intermediate_ca_private_key_file_name)
+    leaf_certificate_file_path = \
+        os.path.join(repository_dir_path,
+                     leaf_certificate_file_name)
+    leaf_private_key_file_path = \
+        os.path.join(repository_dir_path,
+                     leaf_private_key_file_name)
+    # create a signing request from the
+    # current certificate and private key
+    cfssl_output = _cfssl(
+        'gencsr',
+        '-cert',
+        leaf_certificate_file_path,
+        '-key',
+        leaf_private_key_file_path)
+    # capture the output to file
+    _cfssljson('-bare',
+               os.path.join(repository_dir_path,
+                            file_prefix),
+               input=cfssl_output.stdout)
+    # determine csr file path
+    leaf_signing_request_file_path = \
+        os.path.join(repository_dir_path,
+                     f"{file_prefix}.csr")
+    # create leaf signing config
+    leaf_signing_config = \
+        _create_leaf_signing_config(payload)
+    # write leaf ca signing config to file
+    leaf_signing_config_file_path = \
+        os.path.join(repository_dir_path,
+                     LEAF_SIGNING_CONFIG_FILE_NAME)
+    with open(leaf_signing_config_file_path, 'w') \
+            as signing_config_file:
+        json.dump(leaf_signing_config, signing_config_file)
+    # prepare the arguments
+    cfssl_gencert_args = [
+        f"-ca={intermediate_ca_certificate_file_path}",
+        f"-ca-key={intermediate_ca_private_key_file_path}",
+        f"-config={leaf_signing_config_file_path}",
+        '-profile=leaf'
+    ]
+    # add hosts arg, if present
+    # converts list to comma separated list
+    if 'leaf' in payload['params']:
+        if 'hosts' in payload['params']['leaf']:
+            cfssl_gencert_args.append(
+                '-hostname='
+                f"{','.join(payload['params']['leaf']['hosts'])}")
+    # sign the certificate using the intermediate ca
+    # the config file, and the signing request
+    cfssl_output = _cfssl(
+        'sign',
+        *cfssl_gencert_args,
+        '-loglevel=0',
+        leaf_signing_request_file_path)
     # capture the output to file
     _cfssljson('-bare',
                os.path.join(repository_dir_path,

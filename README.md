@@ -2,6 +2,12 @@
 
 ## table of contents
 
+- [overview](#overview)
+
+	- [requirements](#requirements)
+
+	- [features](#features)
+
 - [baseline](#concourse-cfssl-baseline)
 
 - [root ca resource](#concourse-cfssl-root-ca-resource)
@@ -33,18 +39,58 @@
 	- [behavior](#behavior-2)
 		- [check](#check-check-for-leaf)
 		- [in](#in-fetch-leaf-certificate-private-key-and-parent-certificates)
-		- [out](#out-create-leaf)
+		- [out](#out-create-or-renew-leaf)
 	- [examples](#examples-2)
 		- [define resource](#define-resource-2)
 		- [get keypair](#get-keypair-2)
 		- [get keypair and parent certificates](#get-keypair-and-parent-certificates)
 		- [create keypair](#create-keypair-2)
+		- [renew certificate](#renew-certificate-2)
 
 - [development](#development)
 
 - [building](#building)
 
 - [license](#license)
+
+## overview
+
+this project provides a set of [concourse-ci](concourse-ci.org) custom resources designed to wrap the [cfssl](https://github.com/cloudflare/cfssl) cli
+
+### requirements
+
+- an s3 bucket
+- s3 iam credentials  
+  with permission to read and write s3 objects  
+  and read s3 object metadata
+
+### features
+
+- the baseline image provides a common core of system packages, reducing duplication
+
+- each individual resource image contains a copy of the library files and a set of scripts which invoke the appropriate library function (check/in/out)
+
+- the root ca resource will create a `root-ca.pem` certificate and `root-ca-key.pem` private key file under the designated s3 path
+
+	- the root ca certificate can be renewed using the existing certificate and private key
+
+- the intermediate ca resource will create an `intermediate-ca.pem` certificate and `intermediate-ca-key.pem` private key file under the designated s3 path
+
+	- the intermediate ca keypair will be created using the root ca found in the same s3 path
+
+	- the intermediate ca certificate can be renewed using the existing certificate and private key
+
+	- the intermediate ca certificate expiration can be changed upon renewal
+
+- the leaf resource will create a `<leaf_name>.pem` certificate and `<leaf_name>-key.pem` private key file under the designated s3 path
+
+	- the leaf keypair will be created using the intermediate ca found in the same s3 path
+
+	- the leaf certificate can be renewed using the existing certificate and private key
+
+	- the leaf certificate expiration, key usages, and subject alternative names can be changed upon renewal
+
+- tested with concourse 4.x
 
 ## concourse-cfssl-baseline
 
@@ -397,7 +443,7 @@ the following files will be places in the destination, based on parameters:
 
 - `save_intermediate_ca_certificate`: _optional_. save the intermediate ca certificate file to disk. default: `false`
 
-#### `out`: create leaf
+#### `out`: create or renew leaf
 
 creates a new leaf certificate and private key and signs it using the intermediate ca
 
@@ -405,15 +451,9 @@ note: parameters are mostly 1:1 analogous to their cfssl counterparts
 
 see cfssl documentation for best practices and examples
 
-**parameters**
+**common parameters**
 
-- `CN`: _required_. the certificate common name
-
-- `key`: _optional_. the key parameters
-
-	- `algo`: _optional_. algorithm. default: `rsa`
-
-	- `size`: _optional_. size. default: `2048`
+- `action`: _optional_. the operation to perform, either `create` or `renew`. default: `create`
 
 - `leaf`: _optional_. the leaf parameters
 
@@ -431,6 +471,16 @@ see cfssl documentation for best practices and examples
        ```
 
 	- `hosts`: _optional_. array of SANs. default: `null`
+
+**create parameters**
+
+- `CN`: _required_. the certificate common name
+
+- `key`: _optional_. the key parameters
+
+	- `algo`: _optional_. algorithm. default: `rsa`
+
+	- `size`: _optional_. size. default: `2048`
 
 - `names`: _optional_. array containing single dict with fields used when signing
 
@@ -522,9 +572,20 @@ jobs:
         ST: Texas
 ```
 
+#### renew certificate
+
+```
+jobs:
+- name: renew-server-leaf-certificate
+  plan:
+  - put: server-leaf
+    params:
+      action: renew
+```
+
 ## development
 
-install python 3.6 and requirements from `requirements-dev.txt`
+install python 3.7 and requirements from `requirements-dev.txt`
 
 install cfssl
 

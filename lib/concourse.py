@@ -386,6 +386,45 @@ def _create_expiration_metadata(
 
 
 # =============================================================================
+# _create_common_name_metadata
+# =============================================================================
+def _create_common_name_metadata(
+        file_description: str,
+        common_name: str):
+    return [
+        {
+            'name': f"{file_description}_common_name",
+            'value': common_name
+        }]
+
+
+# =============================================================================
+# _create_common_name_metadata
+# =============================================================================
+def _create_common_name_metadata(
+        file_description: str,
+        common_name: str):
+    return [
+        {
+            'name': f"{file_description}_common_name",
+            'value': common_name
+        }]
+
+
+# =============================================================================
+# _create_hosts_metadata
+# =============================================================================
+def _create_hosts_metadata(
+        file_description: str,
+        hosts: list):
+    return [
+        {
+            'name': f"{file_description}_hosts",
+            'value': hosts
+        }]
+
+
+# =============================================================================
 # _update_payload_with_metadata
 # =============================================================================
 def _update_payload_with_metadata(
@@ -660,9 +699,20 @@ def root_ca_out() -> None:
 
     log(f"root ca checksum: {root_ca_checksum}")
 
-    # get issue and expiration dates from certificate info
+    # get certificate info
     root_ca_certificate_info = \
-        lib.cfssl.get_certificate_info(root_ca_certificate_file_path)
+        lib.cfssl.get_certificate_info(
+            root_ca_certificate_file_path)
+
+    # get common name from certificate info
+    root_ca_certificate_common_name = \
+        lib.cfssl.get_certificate_common_name(
+            root_ca_certificate_info)
+
+    log('root ca certificate common name: '
+        f"{root_ca_certificate_common_name}")
+
+    # get issue and expiration dates from certificate info
     root_ca_certificate_issue_date = \
         lib.cfssl.get_certificate_issue_date(
             root_ca_certificate_info)
@@ -712,6 +762,12 @@ def root_ca_out() -> None:
         ROOT_CA_PRIVATE_KEY_FILE_NAME,
         root_ca_private_key_checksum)
 
+    # create root ca certificate common name metadata
+    root_ca_certificate_common_name_metadata = \
+        _create_common_name_metadata(
+            "root_ca_certificate",
+            root_ca_certificate_common_name)
+
     # create certificate expiration metadata
     root_ca_certificate_expiration_metadata = _create_expiration_metadata(
         "root_ca_certificate",
@@ -724,6 +780,9 @@ def root_ca_out() -> None:
     _update_payload_with_metadata(
         output_payload,
         root_ca_private_key_file_metadata)
+    _update_payload_with_metadata(
+        output_payload,
+        root_ca_certificate_common_name_metadata)
     _update_payload_with_metadata(
         output_payload,
         root_ca_certificate_expiration_metadata)
@@ -1047,10 +1106,20 @@ def intermediate_ca_out() -> None:
 
     log(f"intermediate ca checksum: {intermediate_ca_checksum}")
 
-    # get issue and expiration dates from certificate info
+    # get certificate info
     intermediate_ca_certificate_info = \
         lib.cfssl.get_certificate_info(
             intermediate_ca_certificate_file_path)
+
+    # get common name from certificate info
+    intermediate_ca_certificate_common_name = \
+        lib.cfssl.get_certificate_common_name(
+            intermediate_ca_certificate_info)
+
+    log('intermediate ca certificate common name: '
+        f"{intermediate_ca_certificate_common_name}")
+
+    # get issue and expiration dates from certificate info
     intermediate_ca_certificate_issue_date = \
         lib.cfssl.get_certificate_issue_date(
             intermediate_ca_certificate_info)
@@ -1100,6 +1169,12 @@ def intermediate_ca_out() -> None:
         INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME,
         intermediate_ca_private_key_checksum)
 
+    # create intermediate ca certificate common name metadata
+    intermediate_ca_certificate_common_name_metadata = \
+        _create_common_name_metadata(
+            "intermediate_ca_certificate",
+            intermediate_ca_certificate_common_name)
+
     # create intermediate ca certificate expiration metadata
     intermediate_ca_certificate_expiration_metadata = \
         _create_expiration_metadata(
@@ -1113,6 +1188,9 @@ def intermediate_ca_out() -> None:
     _update_payload_with_metadata(
         output_payload,
         intermediate_ca_private_key_file_metadata)
+    _update_payload_with_metadata(
+        output_payload,
+        intermediate_ca_certificate_common_name_metadata)
     _update_payload_with_metadata(
         output_payload,
         intermediate_ca_certificate_expiration_metadata)
@@ -1410,16 +1488,8 @@ def leaf_out() -> None:
         intermediate_ca_private_key_checksum,
         intermediate_ca_private_key_file_path)
 
-    # create leaf key pair
-    leaf_file_prefix = input_payload['source']['leaf_name']
-    lib.cfssl.create_leaf(
-        input_payload,
-        repository_dir,
-        leaf_file_prefix,
-        INTERMEDIATE_CA_CERTIFICATE_FILE_NAME,
-        INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME)
-
     # get leaf file paths
+    leaf_file_prefix = input_payload['source']['leaf_name']
     leaf_certificate_file_name = f"{leaf_file_prefix}.pem"
     leaf_certificate_file_path = \
         _get_repository_file_path(
@@ -1430,6 +1500,86 @@ def leaf_out() -> None:
         _get_repository_file_path(
             repository_dir,
             leaf_private_key_file_name)
+
+    # create leaf s3 objects
+    leaf_certificate = \
+        _get_s3_object(
+            input_payload,
+            s3_resource,
+            leaf_certificate_file_name)
+    leaf_private_key = \
+        _get_s3_object(
+            input_payload,
+            s3_resource,
+            leaf_private_key_file_name)
+
+    # check action
+    if _action_is_create(input_payload):
+        # create leaf key pair
+        lib.cfssl.create_leaf(
+            input_payload,
+            repository_dir,
+            leaf_file_prefix,
+            INTERMEDIATE_CA_CERTIFICATE_FILE_NAME,
+            INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME)
+    elif _action_is_renew(input_payload):
+        # get remote checksums
+        leaf_certificate_initial_checksum = \
+            _get_s3_object_checksum(leaf_certificate)
+        leaf_private_key_initial_checksum = \
+            _get_s3_object_checksum(leaf_private_key)
+
+        log('initial leaf certificate checksum: '
+            f"{leaf_certificate_initial_checksum}")
+        log('initial leaf private key checksum: '
+            f"{leaf_private_key_initial_checksum}")
+
+        # download leaf keypair
+        _download_s3_object_to_path(
+            leaf_certificate,
+            leaf_certificate_initial_checksum,
+            leaf_certificate_file_path)
+        _download_s3_object_to_path(
+            leaf_private_key,
+            leaf_private_key_initial_checksum,
+            leaf_private_key_file_path)
+
+        # get current leaf certificate
+        # issue and expiration dates from certificate info
+        leaf_certificate_initial_info = \
+            lib.cfssl.get_certificate_info(
+                leaf_certificate_file_path)
+        leaf_certificate_initial_issue_date = \
+            lib.cfssl.get_certificate_issue_date(
+                leaf_certificate_initial_info)
+        leaf_certificate_initial_expiration_date = \
+            lib.cfssl.get_certificate_expiration_date(
+                leaf_certificate_initial_info)
+
+        log('initial leaf certificate issue date: '
+            f"{leaf_certificate_initial_issue_date}")
+        log('initial leaf certificate expiration date: '
+            f"{leaf_certificate_initial_expiration_date}")
+
+        # get time until expiration of current certificate
+        leaf_certificate_initial_time_until_expiration = \
+            lib.cfssl.get_duration_until_certificate_expiration(
+                leaf_certificate_initial_expiration_date)
+
+        log('initial leaf certificate time until expiration: '
+            f"{leaf_certificate_initial_time_until_expiration}")
+
+        # renew certificate
+        lib.cfssl.renew_leaf_certificate(
+            input_payload,
+            repository_dir,
+            leaf_file_prefix,
+            INTERMEDIATE_CA_CERTIFICATE_FILE_NAME,
+            INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME,
+            leaf_certificate_file_name,
+            leaf_private_key_file_name)
+    else:
+        raise ValueError("action must be 'create' or 'renew'")
 
     # get leaf local checksums
     leaf_certificate_checksum = \
@@ -1450,17 +1600,44 @@ def leaf_out() -> None:
 
     log(f"leaf checksum: {leaf_checksum}")
 
-    # create leaf s3 objects
-    leaf_certificate = \
-        _get_s3_object(
-            input_payload,
-            s3_resource,
-            leaf_certificate_file_name)
-    leaf_private_key = \
-        _get_s3_object(
-            input_payload,
-            s3_resource,
-            leaf_private_key_file_name)
+    # get certificate info
+    leaf_certificate_info = \
+        lib.cfssl.get_certificate_info(
+            leaf_certificate_file_path)
+
+    # get common name and hosts from certificate info
+    leaf_certificate_common_name = \
+        lib.cfssl.get_certificate_common_name(
+            leaf_certificate_info)
+    leaf_certificate_hosts = \
+        lib.cfssl.get_certificate_hosts(
+            leaf_certificate_info)
+
+    log('leaf certificate common name: '
+        f"{leaf_certificate_common_name}")
+    log('leaf certificate hosts: '
+        f"{leaf_certificate_hosts}")
+
+    # get issue and expiration dates from certificate info
+    leaf_certificate_issue_date = \
+        lib.cfssl.get_certificate_issue_date(
+            leaf_certificate_info)
+    leaf_certificate_expiration_date = \
+        lib.cfssl.get_certificate_expiration_date(
+            leaf_certificate_info)
+
+    log('leaf certificate issue date: '
+        f"{leaf_certificate_issue_date}")
+    log('leaf certificate expiration date: '
+        f"{leaf_certificate_expiration_date}")
+
+    # get time until expiration of certificate
+    leaf_certificate_time_until_expiration = \
+        lib.cfssl.get_duration_until_certificate_expiration(
+            leaf_certificate_expiration_date)
+
+    log('leaf certificate time until expiration: '
+        f"{leaf_certificate_time_until_expiration}")
 
     # upload certificate
     _upload_s3_object_to_path(
@@ -1491,6 +1668,26 @@ def leaf_out() -> None:
         leaf_private_key_file_name,
         leaf_private_key_checksum)
 
+    # create leaf certificate common name metadata
+    leaf_certificate_common_name_metadata = \
+        _create_common_name_metadata(
+            "leaf_certificate",
+            leaf_certificate_common_name)
+
+    # create leaf certificate hosts metadata, if provided
+    leaf_certificate_hosts_metadata = None
+    if leaf_certificate_hosts:
+        leaf_certificate_hosts_metadata = \
+            _create_hosts_metadata(
+                "leaf_certificate",
+                leaf_certificate_hosts)
+
+    # create leaf certificate expiration metadata
+    leaf_certificate_expiration_metadata = \
+        _create_expiration_metadata(
+            "leaf_certificate",
+            leaf_certificate_time_until_expiration)
+
     # update output payload
     _update_payload_with_metadata(
         output_payload,
@@ -1498,6 +1695,16 @@ def leaf_out() -> None:
     _update_payload_with_metadata(
         output_payload,
         leaf_private_key_file_metadata)
+    _update_payload_with_metadata(
+        output_payload,
+        leaf_certificate_common_name_metadata)
+    if leaf_certificate_hosts_metadata:
+        _update_payload_with_metadata(
+            output_payload,
+            leaf_certificate_hosts_metadata)
+    _update_payload_with_metadata(
+        output_payload,
+        leaf_certificate_expiration_metadata)
 
     # write output
     _write_payload(output_payload)
