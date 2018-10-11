@@ -399,29 +399,18 @@ def _create_common_name_metadata(
 
 
 # =============================================================================
-# _create_common_name_metadata
-# =============================================================================
-def _create_common_name_metadata(
-        file_description: str,
-        common_name: str):
-    return [
-        {
-            'name': f"{file_description}_common_name",
-            'value': common_name
-        }]
-
-
-# =============================================================================
 # _create_hosts_metadata
 # =============================================================================
 def _create_hosts_metadata(
         file_description: str,
         hosts: list):
-    return [
-        {
-            'name': f"{file_description}_hosts",
-            'value': hosts
-        }]
+    hosts_metadata = []
+    for i, host in enumerate(hosts):
+        hosts_metadata.append({
+            'name': f"{file_description}_host_{i}",
+            'value': host
+        })
+    return hosts_metadata
 
 
 # =============================================================================
