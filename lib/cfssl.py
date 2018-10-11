@@ -494,3 +494,78 @@ def renew_root_certificate(
                os.path.join(repository_dir_path,
                             file_prefix),
                input=cfssl_output.stdout)
+
+
+# =============================================================================
+# renew_intermediate_certificate
+# =============================================================================
+# cfssl gencsr -key intermediate-ca-key.pem -cert intermediate-ca.pem | cfssljson -bare intermediate-ca
+# cfssl sign -ca root-ca.pem -ca-key root-ca-key.pem -config config.json -profile ca intermediate-ca.csr | cfssljson -bare intermediate-ca
+def renew_intermediate_certificate(
+    payload: dict,
+    repository_dir_path: str,
+    file_prefix: str,
+    root_ca_certificate_file_name: str,
+    root_ca_private_key_file_name: str,
+    intermediate_ca_certificate_file_name: str,
+    intermediate_ca_private_key_file_name: str
+) -> None:
+    # determine file paths
+    root_ca_certificate_file_path = \
+        os.path.join(repository_dir_path,
+                     root_ca_certificate_file_name)
+    root_ca_private_key_file_path = \
+        os.path.join(repository_dir_path,
+                     root_ca_private_key_file_name)
+    intermediate_ca_certificate_file_path = \
+        os.path.join(repository_dir_path,
+                     intermediate_ca_certificate_file_name)
+    intermediate_ca_private_key_file_path = \
+        os.path.join(repository_dir_path,
+                     intermediate_ca_private_key_file_name)
+    # create a signing request from the
+    # current certificate and private key
+    cfssl_output = _cfssl(
+        'gencsr',
+        '-cert',
+        intermediate_ca_certificate_file_path,
+        '-key',
+        intermediate_ca_private_key_file_path)
+    # capture the output to file
+    _cfssljson('-bare',
+               os.path.join(repository_dir_path,
+                            file_prefix),
+               input=cfssl_output.stdout)
+    # determine csr file path
+    intermediate_ca_signing_request_file_path = \
+        os.path.join(repository_dir_path,
+                     f"{file_prefix}.csr")
+    # create intermediate ca signing config
+    intermediate_ca_signing_config = \
+        _create_intermediate_ca_signing_config(payload)
+    # write intermediate ca signing config to file
+    intermediate_ca_signing_config_file_path = \
+        os.path.join(repository_dir_path,
+                     INTERMEDIATE_CA_SIGNING_CONFIG_FILE_NAME)
+    with open(intermediate_ca_signing_config_file_path, 'w') \
+            as signing_config_file:
+        json.dump(intermediate_ca_signing_config, signing_config_file)
+    # sign the certificate using the root ca,
+    # the signing request,
+    # and the signing config
+    cfssl_output = _cfssl(
+        'sign',
+        '-ca',
+        root_ca_certificate_file_path,
+        '-ca-key',
+        root_ca_private_key_file_path,
+        '-config',
+        intermediate_ca_signing_config_file_path,
+        '-profile=ca',
+        '-loglevel=0',
+        intermediate_ca_signing_request_file_path)
+    # capture the output to file
+    _cfssljson('-bare',
+               os.path.join(repository_dir_path,
+                            file_prefix),
+               input=cfssl_output.stdout)

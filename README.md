@@ -21,11 +21,12 @@
 	- [behavior](#behavior-1)
 		- [check](#check-check-for-intermediate-ca)
 		- [in](#in-fetch-intermediate-ca-certificate-and-private-key)
-		- [out](#out-create-intermediate-ca)
+		- [out](#out-create-or-renew-intermediate-ca)
 	- [examples](#examples-1)
 		- [define resource](#define-resource-1)
 		- [get keypair](#get-keypair-1)
 		- [create keypair](#create-keypair-1)
+		- [renew certificate](#renew-certificate-1)
 
 - [leaf resource](#concourse-cfssl-leaf-resource)
 	- [source configuration](#source-configuration-2)
@@ -242,7 +243,7 @@ the following files will be places in the destination, based on parameters:
 
 - `save_private_key`: _optional_. save the private key file to disk. default: `false`
 
-#### `out`: create intermediate ca
+#### `out`: create or renew intermediate ca
 
 creates a new intermediate ca certificate and private key and signs it using the root ca
 
@@ -250,7 +251,15 @@ note: parameters are mostly 1:1 analogous to their cfssl counterparts
 
 see cfssl documentation for best practices and examples
 
-**parameters**
+**common parameters**
+
+- `action`: _optional_. the operation to perform, either `create` or `renew`. default: `create`
+
+- `ca`: _optional_. the ca parameters
+
+	- `expiry`: _optional_. the expiration length to use for the ca (a time duration in the form understood by go's time package). default: `43800h`
+
+**create parameters**
 
 - `CN`: _required_. the certificate common name
 
@@ -259,10 +268,6 @@ see cfssl documentation for best practices and examples
 	- `algo`: _optional_. algorithm. default: `rsa`
 
 	- `size`: _optional_. size. default: `2048`
-
-- `ca`: _optional_. the ca parameters
-
-	- `expiry`: _optional_. the expiration length to use for the ca (a time duration in the form understood by go's time package). default: `43800h`
 
 - `names`: _optional_. array containing single dict with fields used when signing
 
@@ -327,6 +332,17 @@ jobs:
         O: EXAMPLE
         OU: DevOps
         ST: Texas
+```
+
+#### renew certificate
+
+```
+jobs:
+- name: renew-intermediate-ca-certificate
+  plan:
+  - put: my-intermediate-ca
+    params:
+      action: renew
 ```
 
 ## concourse-cfssl-leaf-resource

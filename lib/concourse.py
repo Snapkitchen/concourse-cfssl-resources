@@ -591,24 +591,24 @@ def root_ca_out() -> None:
             ROOT_CA_FILE_PREFIX)
     elif _action_is_renew(input_payload):
         # get remote checksums
-        root_ca_certificate_checksum = \
+        root_ca_certificate_initial_checksum = \
             _get_s3_object_checksum(root_ca_certificate)
-        root_ca_private_key_checksum = \
+        root_ca_private_key_initial_checksum = \
             _get_s3_object_checksum(root_ca_private_key)
 
         log('initial root ca certificate checksum: '
-            f"{root_ca_certificate_checksum}")
+            f"{root_ca_certificate_initial_checksum}")
         log('initial root ca private key checksum: '
-            f"{root_ca_private_key_checksum}")
+            f"{root_ca_private_key_initial_checksum}")
 
         # download keypair
         _download_s3_object_to_path(
             root_ca_certificate,
-            root_ca_certificate_checksum,
+            root_ca_certificate_initial_checksum,
             root_ca_certificate_file_path)
         _download_s3_object_to_path(
             root_ca_private_key,
-            root_ca_private_key_checksum,
+            root_ca_private_key_initial_checksum,
             root_ca_private_key_file_path)
 
         # get current issue and expiration dates from certificate info
@@ -652,6 +652,14 @@ def root_ca_out() -> None:
     log(f"root ca certificate checksum: {root_ca_certificate_checksum}")
     log(f"root ca private key checksum: {root_ca_private_key_checksum}")
 
+    # get local checksum
+    root_ca_checksum = \
+        _get_keypair_checksum(
+            root_ca_certificate_checksum,
+            root_ca_private_key_checksum)
+
+    log(f"root ca checksum: {root_ca_checksum}")
+
     # get issue and expiration dates from certificate info
     root_ca_certificate_info = \
         lib.cfssl.get_certificate_info(root_ca_certificate_file_path)
@@ -674,14 +682,6 @@ def root_ca_out() -> None:
 
     log('root ca certificate time until expiration: '
         f"{root_ca_certificate_time_until_expiration}")
-
-    # get local checksum
-    root_ca_checksum = \
-        _get_keypair_checksum(
-            root_ca_certificate_checksum,
-            root_ca_private_key_checksum)
-
-    log(f"root ca checksum: {root_ca_checksum}")
 
     # upload certificate
     _upload_s3_object_to_path(
@@ -938,14 +938,6 @@ def intermediate_ca_out() -> None:
         root_ca_private_key_checksum,
         root_ca_private_key_file_path)
 
-    # create intermediate ca key pair
-    lib.cfssl.create_intermediate_ca(
-        input_payload,
-        repository_dir,
-        INTERMEDIATE_CA_FILE_PREFIX,
-        ROOT_CA_CERTIFICATE_FILE_NAME,
-        ROOT_CA_PRIVATE_KEY_FILE_NAME)
-
     # get intermediate ca file paths
     intermediate_ca_certificate_file_path = \
         _get_repository_file_path(
@@ -955,6 +947,86 @@ def intermediate_ca_out() -> None:
         _get_repository_file_path(
             repository_dir,
             INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME)
+
+    # create intermediate ca s3 objects
+    intermediate_ca_certificate = \
+        _get_s3_object(
+            input_payload,
+            s3_resource,
+            INTERMEDIATE_CA_CERTIFICATE_FILE_NAME)
+    intermediate_ca_private_key = \
+        _get_s3_object(
+            input_payload,
+            s3_resource,
+            INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME)
+
+    # check action
+    if _action_is_create(input_payload):
+        # create intermediate ca key pair
+        lib.cfssl.create_intermediate_ca(
+            input_payload,
+            repository_dir,
+            INTERMEDIATE_CA_FILE_PREFIX,
+            ROOT_CA_CERTIFICATE_FILE_NAME,
+            ROOT_CA_PRIVATE_KEY_FILE_NAME)
+    elif _action_is_renew(input_payload):
+        # get remote checksums
+        intermediate_ca_certificate_initial_checksum = \
+            _get_s3_object_checksum(intermediate_ca_certificate)
+        intermediate_ca_private_key_initial_checksum = \
+            _get_s3_object_checksum(intermediate_ca_private_key)
+
+        log('initial intermediate ca certificate checksum: '
+            f"{intermediate_ca_certificate_initial_checksum}")
+        log('initial intermediate ca private key checksum: '
+            f"{intermediate_ca_private_key_initial_checksum}")
+
+        # download intermediate ca keypair
+        _download_s3_object_to_path(
+            intermediate_ca_certificate,
+            intermediate_ca_certificate_initial_checksum,
+            intermediate_ca_certificate_file_path)
+        _download_s3_object_to_path(
+            intermediate_ca_private_key,
+            intermediate_ca_private_key_initial_checksum,
+            intermediate_ca_private_key_file_path)
+
+        # get current intermedia ca certificate
+        # issue and expiration dates from certificate info
+        intermediate_ca_certificate_initial_info = \
+            lib.cfssl.get_certificate_info(
+                intermediate_ca_certificate_file_path)
+        intermediate_ca_certificate_initial_issue_date = \
+            lib.cfssl.get_certificate_issue_date(
+                intermediate_ca_certificate_initial_info)
+        intermediate_ca_certificate_initial_expiration_date = \
+            lib.cfssl.get_certificate_expiration_date(
+                intermediate_ca_certificate_initial_info)
+
+        log('initial intermediate ca certificate issue date: '
+            f"{intermediate_ca_certificate_initial_issue_date}")
+        log('initial intermediate ca certificate expiration date: '
+            f"{intermediate_ca_certificate_initial_expiration_date}")
+
+        # get time until expiration of current certificate
+        intermediate_ca_certificate_initial_time_until_expiration = \
+            lib.cfssl.get_duration_until_certificate_expiration(
+                intermediate_ca_certificate_initial_expiration_date)
+
+        log('initial root ca certificate time until expiration: '
+            f"{intermediate_ca_certificate_initial_time_until_expiration}")
+
+        # renew certificate
+        lib.cfssl.renew_intermediate_certificate(
+            input_payload,
+            repository_dir,
+            INTERMEDIATE_CA_FILE_PREFIX,
+            ROOT_CA_CERTIFICATE_FILE_NAME,
+            ROOT_CA_PRIVATE_KEY_FILE_NAME,
+            INTERMEDIATE_CA_CERTIFICATE_FILE_NAME,
+            INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME)
+    else:
+        raise ValueError("action must be 'create' or 'renew'")
 
     # get intermediate ca local checksums
     intermediate_ca_certificate_checksum = \
@@ -975,17 +1047,29 @@ def intermediate_ca_out() -> None:
 
     log(f"intermediate ca checksum: {intermediate_ca_checksum}")
 
-    # create intermediate ca s3 objects
-    intermediate_ca_certificate = \
-        _get_s3_object(
-            input_payload,
-            s3_resource,
-            INTERMEDIATE_CA_CERTIFICATE_FILE_NAME)
-    intermediate_ca_private_key = \
-        _get_s3_object(
-            input_payload,
-            s3_resource,
-            INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME)
+    # get issue and expiration dates from certificate info
+    intermediate_ca_certificate_info = \
+        lib.cfssl.get_certificate_info(
+            intermediate_ca_certificate_file_path)
+    intermediate_ca_certificate_issue_date = \
+        lib.cfssl.get_certificate_issue_date(
+            intermediate_ca_certificate_info)
+    intermediate_ca_certificate_expiration_date = \
+        lib.cfssl.get_certificate_expiration_date(
+            intermediate_ca_certificate_info)
+
+    log('intermediate ca certificate issue date: '
+        f"{intermediate_ca_certificate_issue_date}")
+    log('intermediate ca certificate expiration date: '
+        f"{intermediate_ca_certificate_expiration_date}")
+
+    # get time until expiration of certificate
+    intermediate_ca_certificate_time_until_expiration = \
+        lib.cfssl.get_duration_until_certificate_expiration(
+            intermediate_ca_certificate_expiration_date)
+
+    log('intermediate ca certificate time until expiration: '
+        f"{intermediate_ca_certificate_time_until_expiration}")
 
     # upload certificate
     _upload_s3_object_to_path(
@@ -1016,6 +1100,12 @@ def intermediate_ca_out() -> None:
         INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME,
         intermediate_ca_private_key_checksum)
 
+    # create intermediate ca certificate expiration metadata
+    intermediate_ca_certificate_expiration_metadata = \
+        _create_expiration_metadata(
+            "intermediate_ca_certificate",
+            intermediate_ca_certificate_time_until_expiration)
+
     # update output payload
     _update_payload_with_metadata(
         output_payload,
@@ -1023,6 +1113,9 @@ def intermediate_ca_out() -> None:
     _update_payload_with_metadata(
         output_payload,
         intermediate_ca_private_key_file_metadata)
+    _update_payload_with_metadata(
+        output_payload,
+        intermediate_ca_certificate_expiration_metadata)
 
     # write output
     _write_payload(output_payload)
