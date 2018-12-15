@@ -34,6 +34,7 @@ INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME: str = \
 
 CA_SUBDIR: str = 'ca'
 
+
 # =============================================================================
 #
 # private hash functions
@@ -199,6 +200,7 @@ def _get_repository_dir_path() -> str:
 # _read_payload
 # =============================================================================
 def _read_payload(stream=sys.stdin) -> Any:
+    #
     return json.load(stream)
 
 
@@ -1374,6 +1376,8 @@ def leaf_in() -> None:
             # get the ca destination dir
             if _should_save_to_ca_subdir(input_payload):
                 ca_destination_dir = _get_repository_ca_subdir(repository_dir)
+                if not os.path.exists(ca_destination_dir):
+                    os.makedirs(ca_destination_dir)
             else:
                 ca_destination_dir = repository_dir
 
@@ -1415,6 +1419,8 @@ def leaf_in() -> None:
             # get the ca destination dir
             if _should_save_to_ca_subdir(input_payload):
                 ca_destination_dir = _get_repository_ca_subdir(repository_dir)
+                if not os.path.exists(ca_destination_dir):
+                    os.makedirs(ca_destination_dir)
             else:
                 ca_destination_dir = repository_dir
 

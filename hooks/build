@@ -11,21 +11,44 @@ echo "building baseline image"
       --tag "${baseline_image}" \
       --file baseline.Dockerfile \
       .
+
+set -m          # allow for job control
+EXIT_CODE=0     # exit code of overall script
+
+check_child_errors() {
+  for job in $(jobs -p)
+  do
+    echo "PID => ${job}"
+    if ! wait ${job}
+    then
+      echo "At least one test failed with exit code => $?"
+      EXIT_CODE=1
+    fi
+  done
+}
+
+trap 'check_child_errors' CHLD
+
 echo "building root ca resource image"
   docker build \
       --build-arg PARENT_IMAGE="${baseline_image}" \
       --tag "${root_ca_image}" \
       --file root-ca.Dockerfile \
-      .
+      . &
 echo "building intermediate ca resource image"
   docker build \
       --build-arg PARENT_IMAGE="${baseline_image}" \
       --tag "${intermediate_ca_image}" \
       --file intermediate-ca.Dockerfile \
-      .
+      . &
 echo "building leaf resource image"
   docker build \
       --build-arg PARENT_IMAGE="${baseline_image}" \
       --tag "${leaf_image}" \
       --file leaf.Dockerfile \
-      .
+      . &
+
+wait
+
+echo "EXIT_CODE => ${EXIT_CODE}"
+exit "${EXIT_CODE}"
