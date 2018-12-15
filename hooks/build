@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -ex
+
+baseline_image="index.docker.io/snapkitchen/concourse-cfssl-baseline:${DOCKER_TAG}"
+root_ca_image="index.docker.io/snapkitchen/concourse-cfssl-root-ca-resource:${DOCKER_TAG}"
+intermediate_ca_image="index.docker.io/snapkitchen/concourse-cfssl-intermediate-ca-resource:${DOCKER_TAG}"
+leaf_image="index.docker.io/snapkitchen/concourse-cfssl-leaf-resource:${DOCKER_TAG}"
+
+echo "building baseline image"
+  docker build \
+      --tag "${baseline_image}" \
+      --file baseline.Dockerfile \
+      .
+echo "building root ca resource image"
+  docker build \
+      --build-arg PARENT_IMAGE="${baseline_image}" \
+      --tag "${root_ca_image}" \
+      --file root-ca.Dockerfile \
+      .
+echo "building intermediate ca resource image"
+  docker build \
+      --build-arg PARENT_IMAGE="${baseline_image}" \
+      --tag "${intermediate_ca_image}" \
+      --file intermediate-ca.Dockerfile \
+      .
+echo "building leaf resource image"
+  docker build \
+      --build-arg PARENT_IMAGE="${baseline_image}" \
+      --tag "${leaf_image}" \
+      --file leaf.Dockerfile \
+      .

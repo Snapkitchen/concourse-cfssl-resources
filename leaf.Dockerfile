@@ -1,4 +1,5 @@
-FROM snapkitchen/concourse-cfssl-baseline:latest
+ARG PARENT_IMAGE=snapkitchen/concourse-cfssl-baseline:latest
+FROM $PARENT_IMAGE
 
 COPY resources/leaf/scripts/check \
     resources/leaf/scripts/in \

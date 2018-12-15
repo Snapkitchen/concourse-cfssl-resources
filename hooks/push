@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -ex
+
+baseline_image="index.docker.io/snapkitchen/concourse-cfssl-baseline:${DOCKER_TAG}"
+root_ca_image="index.docker.io/snapkitchen/concourse-cfssl-root-ca-resource:${DOCKER_TAG}"
+intermediate_ca_image="index.docker.io/snapkitchen/concourse-cfssl-intermediate-ca-resource:${DOCKER_TAG}"
+leaf_image="index.docker.io/snapkitchen/concourse-cfssl-leaf-resource:${DOCKER_TAG}"
+
+echo "pushing baseline image"
+docker push "${baseline_image}"
+echo "pushing root ca resource image"
+docker push "${root_ca_image}"
+echo "pushing intermediate ca resource image"
+docker push "${intermediate_ca_image}"
+echo "pushing leaf resource image"
+docker push "${leaf_image}"
