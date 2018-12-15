@@ -6,33 +6,11 @@ root_ca_image="index.docker.io/snapkitchen/concourse-cfssl-root-ca-resource:${DO
 intermediate_ca_image="index.docker.io/snapkitchen/concourse-cfssl-intermediate-ca-resource:${DOCKER_TAG}"
 leaf_image="index.docker.io/snapkitchen/concourse-cfssl-leaf-resource:${DOCKER_TAG}"
 
-set -m          # allow for job control
-EXIT_CODE=0     # exit code of overall script
-
-check_child_errors() {
-  for job in $(jobs -p)
-  do
-    echo "PID => ${job}"
-    if ! wait ${job}
-    then
-      echo "At least one test failed with exit code => $?"
-      EXIT_CODE=1
-    fi
-  done
-}
-
-trap 'check_child_errors' CHLD
-
 echo "pushing baseline image"
-docker push "${baseline_image}" &
+docker push "${baseline_image}"
 echo "pushing root ca resource image"
-docker push "${root_ca_image}" &
+docker push "${root_ca_image}"
 echo "pushing intermediate ca resource image"
-docker push "${intermediate_ca_image}" &
+docker push "${intermediate_ca_image}"
 echo "pushing leaf resource image"
-docker push "${leaf_image}" &
-
-wait
-
-echo "EXIT_CODE => ${EXIT_CODE}"
-exit "${EXIT_CODE}"
+docker push "${leaf_image}"
