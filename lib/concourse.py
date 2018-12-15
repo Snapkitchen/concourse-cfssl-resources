@@ -1407,7 +1407,7 @@ def leaf_in() -> None:
                 _get_s3_object(
                     input_payload,
                     s3_resource,
-                    ROOT_CA_CERTIFICATE_FILE_NAME)
+                    INTERMEDIATE_CA_CERTIFICATE_FILE_NAME)
 
             # get remote intermediate ca certificate checksum
             intermediate_ca_certificate_checksum = \
@@ -1428,7 +1428,7 @@ def leaf_in() -> None:
             intermediate_ca_certificate_file_path = \
                 _get_repository_file_path(
                     ca_destination_dir,
-                    ROOT_CA_CERTIFICATE_FILE_NAME)
+                    INTERMEDIATE_CA_CERTIFICATE_FILE_NAME)
 
             # download intermediate ca certificate
             _download_s3_object_to_path(
