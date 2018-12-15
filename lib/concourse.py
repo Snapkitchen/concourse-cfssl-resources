@@ -32,6 +32,7 @@ INTERMEDIATE_CA_CERTIFICATE_FILE_NAME: str = \
 INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME: str = \
     f"{INTERMEDIATE_CA_FILE_PREFIX}-key.pem"
 
+CA_SUBDIR: str = 'ca'
 
 # =============================================================================
 #
@@ -217,6 +218,13 @@ def _get_repository_file_path(
 
 
 # =============================================================================
+# _get_repository_ca_subdir
+# =============================================================================
+def _get_repository_ca_subdir(repository_dir_path: str) -> str:
+    return os.path.join(repository_dir_path, CA_SUBDIR)
+
+
+# =============================================================================
 #
 # private decision functions
 #
@@ -261,6 +269,17 @@ def _should_download_root_ca_certificate(payload: dict) -> bool:
 def _should_download_intermediate_ca_certificate(payload: dict) -> bool:
     if 'params' in payload:
         return payload['params'].get('save_intermediate_ca_certificate',
+                                     False) is True
+    else:
+        return False
+
+
+# =============================================================================
+# _should_save_to_ca_subdir
+# =============================================================================
+def _should_save_to_ca_subdir(payload: dict) -> bool:
+    if 'params' in payload:
+        return payload['params'].get('save_to_ca_subdir',
                                      False) is True
     else:
         return False
@@ -1352,10 +1371,16 @@ def leaf_in() -> None:
             log('root ca certificate checksum: '
                 f"{root_ca_certificate_checksum}")
 
+            # get the ca destination dir
+            if _should_save_to_ca_subdir(input_payload):
+                ca_destination_dir = _get_repository_ca_subdir(repository_dir)
+            else:
+                ca_destination_dir = repository_dir
+
             # get root ca certificate file path
             root_ca_certificate_file_path = \
                 _get_repository_file_path(
-                    repository_dir,
+                    ca_destination_dir,
                     ROOT_CA_CERTIFICATE_FILE_NAME)
 
             # download root ca certificate
@@ -1387,10 +1412,16 @@ def leaf_in() -> None:
             log('intermediate ca certificate checksum: '
                 f"{intermediate_ca_certificate_checksum}")
 
+            # get the ca destination dir
+            if _should_save_to_ca_subdir(input_payload):
+                ca_destination_dir = _get_repository_ca_subdir(repository_dir)
+            else:
+                ca_destination_dir = repository_dir
+
             # get intermediate ca certificate file path
             intermediate_ca_certificate_file_path = \
                 _get_repository_file_path(
-                    repository_dir,
+                    ca_destination_dir,
                     ROOT_CA_CERTIFICATE_FILE_NAME)
 
             # download intermediate ca certificate

@@ -82,7 +82,7 @@ this project provides a set of [concourse-ci](concourse-ci.org) custom resources
 
 	- the intermediate ca certificate expiration can be changed upon renewal
 
-- the leaf resource will create a `<leaf_name>.pem` certificate and `<leaf_name>-key.pem` private key file under the designated s3 path
+- the leaf resource will create a `{leaf_name}.pem` certificate and `{leaf_name}-key.pem` private key file under the designated s3 path
 
 	- the leaf keypair will be created using the intermediate ca found in the same s3 path
 
@@ -119,7 +119,7 @@ creates and gets root ca using cfssl
 
 - `region_name`: _required_. the region the bucket is in.
 
-- `prefix`: _optional_. the prefix path to prepend to the cfssl files. e.g. `prefix: my/prefix/path` will result in a root ca cert file path of `<bucket>/my/prefix/path/root-ca.pem` default: `null`
+- `prefix`: _optional_. the prefix path to prepend to the cfssl files. e.g. `prefix: my/prefix/path` will result in a root ca cert file path of `{bucket}/my/prefix/path/root-ca.pem` default: `null`
 
 - `endpoint`: _optional_. custom endpoint for using S3 compatible provider.
 
@@ -261,7 +261,7 @@ creates and gets intermediate ca using cfssl
 
 - `region_name`: _required_. the region the bucket is in.
 
-- `prefix`: _optional_. the prefix path to prepend to the cfssl files. e.g. `prefix: my/prefix/path` will result in an intermediate ca cert file path of `<bucket>/my/prefix/path/intermediate-ca.pem` default: `null`  
+- `prefix`: _optional_. the prefix path to prepend to the cfssl files. e.g. `prefix: my/prefix/path` will result in an intermediate ca cert file path of `{bucket}/my/prefix/path/intermediate-ca.pem` default: `null`  
   
   note: this path must also contain the root ca certificate and private key under `root-ca.pem` and `root-ca-key.pem`, respectively
 
@@ -397,7 +397,7 @@ creates and gets leaf using cfssl
 
 ### source configuration
 
-- `leaf_name`: _required_. the leaf name (used for file names, e.g.: `<leaf-name>.pem`)
+- `leaf_name`: _required_. the leaf name (used for file names, e.g.: `{leaf-name}.pem`)
 
 - `bucket_name`: _required_. the name of the bucket.
 
@@ -407,7 +407,7 @@ creates and gets leaf using cfssl
 
 - `region_name`: _required_. the region the bucket is in.
 
-- `prefix`: _optional_. the prefix path to prepend to the cfssl files. e.g. `prefix: my/prefix/path` will result in a leaf cert file path of `<bucket>/my/prefix/path/<leaf-name>.pem` default: `null`  
+- `prefix`: _optional_. the prefix path to prepend to the cfssl files. e.g. `prefix: my/prefix/path` will result in a leaf cert file path of `{bucket}/my/prefix/path/{leaf-name}.pem` default: `null`  
   
   note: this path must also contain the intermediate ca certificate and private key under `intermediate-ca.pem` and `intermediate-ca-key.pem`, respectively
 
@@ -425,13 +425,13 @@ fetches the leaf certificate, leaf private key, root ca certificate, and interme
 
 the following files will be places in the destination, based on parameters:
 
-- `/<leaf_name>.pem`: the leaf certificate file
+- `/{leaf_name}.pem`: the leaf certificate file
 
-- `/<leaf_name>-key.pem`: the leaf private key file
+- `/{leaf_name}-key.pem`: the leaf private key file
 
-- `/root-ca.pem`: the root ca certificate file
+- `/{ca/}root-ca.pem`: the root ca certificate file
 
-- `/intermediate-ca.pem`: the intermediate ca certificate file
+- `/{ca/}intermediate-ca.pem`: the intermediate ca certificate file
 
 **parameters**
 
@@ -442,6 +442,8 @@ the following files will be places in the destination, based on parameters:
 - `save_root_ca_certificate`: _optional_. save the root ca certificate file to disk. default: `false`
 
 - `save_intermediate_ca_certificate`: _optional_. save the intermediate ca certificate file to disk. default: `false`
+
+- `save_to_ca_subdir`: _optional_. save the ca certificates into a `ca/` subdirectory. default: `false`
 
 #### `out`: create or renew leaf
 
