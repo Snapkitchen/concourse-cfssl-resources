@@ -1462,8 +1462,9 @@ def leaf_in() -> None:
         if _should_save_ca_certificate_chain(input_payload):
             # create temp files as download scratch
             temp_intermediate_ca_certificate_file = \
-                tempfile.NamedTemporaryFile()
-            temp_root_ca_certificate_file = tempfile.NamedTemporaryFile()
+                tempfile.NamedTemporaryFile(mode='r')
+            temp_root_ca_certificate_file = \
+                tempfile.NamedTemporaryFile(mode='r')
 
             # create intermediate ca certificate s3 object
             intermediate_ca_certificate = \
@@ -1520,12 +1521,20 @@ def leaf_in() -> None:
                     CA_CERTIFICATE_CHAIN_FILE_NAME)
 
             # get the contents of intermediate ca certificate
-            temp_intermediate_ca_certificate_file_contents = \
-                temp_intermediate_ca_certificate_file.readlines()
+            with open(temp_intermediate_ca_certificate_file.name, 'r') \
+                    as opened_temp_file:
+                temp_intermediate_ca_certificate_file_contents = \
+                    opened_temp_file.readlines()
 
             # get the contents of root ca certificate
-            temp_root_ca_certificate_file_contents = \
-                temp_root_ca_certificate_file.readlines()
+            with open(temp_root_ca_certificate_file.name, 'r') \
+                    as opened_temp_file:
+                temp_root_ca_certificate_file_contents = \
+                    opened_temp_file.readlines()
+
+            # close the temp files
+            temp_root_ca_certificate_file.close()
+            temp_intermediate_ca_certificate_file.close()
 
             # write the ca certificate chain file
             with open(ca_certificate_chain_file_path, 'w') \
@@ -1535,13 +1544,12 @@ def leaf_in() -> None:
                 ca_certificate_chain_file.writelines(
                     temp_root_ca_certificate_file_contents)
 
-            # close the temp files
-            temp_root_ca_certificate_file.close()
-            temp_intermediate_ca_certificate_file.close()
-
             # get ca certificate chain local checksum
             ca_certificate_chain_checksum = \
                 _hash_file(ca_certificate_chain_file_path)
+
+            log('ca certificate chain checksum: '
+                f"{ca_certificate_chain_checksum}")
 
             # create ca certificate chain file metadata
             ca_certificate_chain_file_metadata = _create_file_metadata(
