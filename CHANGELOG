@@ -1,3 +1,8 @@
+2018-12-20
+
+- add save_ca_chain to leaf in phase
+  - when true, produces a certificate chain file with the root and intermediate certs combined
+
 2018-12-15
 
 - added save_to_ca_subdir to leaf in phase

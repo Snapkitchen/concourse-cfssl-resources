@@ -433,6 +433,8 @@ the following files will be places in the destination, based on parameters:
 
 - `/{ca/}intermediate-ca.pem`: the intermediate ca certificate file
 
+- `/{ca/}ca-chain.pem`: the intermediate ca certificate file
+
 **parameters**
 
 - `save_certificate`: _optional_. save the certificate file to disk. default: `true`
@@ -442,6 +444,8 @@ the following files will be places in the destination, based on parameters:
 - `save_root_ca_certificate`: _optional_. save the root ca certificate file to disk. default: `false`
 
 - `save_intermediate_ca_certificate`: _optional_. save the intermediate ca certificate file to disk. default: `false`
+
+- `save_ca_chain`: _optional_. combine the ca certificates and save them as the ca chain certificate file. default: `false`
 
 - `save_to_ca_subdir`: _optional_. save the ca certificates into a `ca/` subdirectory. default: `false`
 

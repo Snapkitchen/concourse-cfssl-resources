@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 from datetime import timedelta
 from typing import Any, Optional
 
@@ -31,6 +32,10 @@ INTERMEDIATE_CA_CERTIFICATE_FILE_NAME: str = \
     f"{INTERMEDIATE_CA_FILE_PREFIX}.pem"
 INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME: str = \
     f"{INTERMEDIATE_CA_FILE_PREFIX}-key.pem"
+
+CA_CERTIFICATE_CHAIN_FILE_PREFIX: str = 'ca-chain'
+CA_CERTIFICATE_CHAIN_FILE_NAME: str = \
+    f"{CA_CERTIFICATE_CHAIN_FILE_PREFIX}.pem"
 
 CA_SUBDIR: str = 'ca'
 
@@ -200,7 +205,6 @@ def _get_repository_dir_path() -> str:
 # _read_payload
 # =============================================================================
 def _read_payload(stream=sys.stdin) -> Any:
-    #
     return json.load(stream)
 
 
@@ -282,6 +286,17 @@ def _should_download_intermediate_ca_certificate(payload: dict) -> bool:
 def _should_save_to_ca_subdir(payload: dict) -> bool:
     if 'params' in payload:
         return payload['params'].get('save_to_ca_subdir',
+                                     False) is True
+    else:
+        return False
+
+
+# =============================================================================
+# _should_save_ca_certificate_chain
+# =============================================================================
+def _should_save_ca_certificate_chain(payload: dict) -> bool:
+    if 'params' in payload:
+        return payload['params'].get('save_ca_chain',
                                      False) is True
     else:
         return False
@@ -1444,7 +1459,99 @@ def leaf_in() -> None:
             _update_payload_with_metadata(
                 output_payload,
                 intermediate_ca_certificate_file_metadata)
+        if _should_save_ca_certificate_chain(input_payload):
+            # create temp files as download scratch
+            temp_intermediate_ca_certificate_file = \
+                tempfile.NamedTemporaryFile()
+            temp_root_ca_certificate_file = tempfile.NamedTemporaryFile()
 
+            # create intermediate ca certificate s3 object
+            intermediate_ca_certificate = \
+                _get_s3_object(
+                    input_payload,
+                    s3_resource,
+                    INTERMEDIATE_CA_CERTIFICATE_FILE_NAME)
+
+            # get remote intermediate ca certificate checksum
+            intermediate_ca_certificate_checksum = \
+                _get_s3_object_checksum(intermediate_ca_certificate)
+
+            log('intermediate ca certificate checksum: '
+                f"{intermediate_ca_certificate_checksum}")
+
+            # download intermediate ca certificate
+            _download_s3_object_to_path(
+                intermediate_ca_certificate,
+                intermediate_ca_certificate_checksum,
+                temp_intermediate_ca_certificate_file.name)
+
+            # create root ca certificate s3 object
+            root_ca_certificate = \
+                _get_s3_object(
+                    input_payload,
+                    s3_resource,
+                    ROOT_CA_CERTIFICATE_FILE_NAME)
+
+            # get remote root ca certificate checksum
+            root_ca_certificate_checksum = \
+                _get_s3_object_checksum(root_ca_certificate)
+
+            log('root ca certificate checksum: '
+                f"{root_ca_certificate_checksum}")
+
+            # download root ca certificate
+            _download_s3_object_to_path(
+                root_ca_certificate,
+                root_ca_certificate_checksum,
+                temp_root_ca_certificate_file.name)
+
+            # get the ca destination dir
+            if _should_save_to_ca_subdir(input_payload):
+                ca_destination_dir = _get_repository_ca_subdir(repository_dir)
+                if not os.path.exists(ca_destination_dir):
+                    os.makedirs(ca_destination_dir)
+            else:
+                ca_destination_dir = repository_dir
+
+            # get ca certificate chain file path
+            ca_certificate_chain_file_path = \
+                _get_repository_file_path(
+                    ca_destination_dir,
+                    CA_CERTIFICATE_CHAIN_FILE_NAME)
+
+            # get the contents of intermediate ca certificate
+            temp_intermediate_ca_certificate_file_contents = \
+                temp_intermediate_ca_certificate_file.readlines()
+
+            # get the contents of root ca certificate
+            temp_root_ca_certificate_file_contents = \
+                temp_root_ca_certificate_file.readlines()
+
+            # write the ca certificate chain file
+            with open(ca_certificate_chain_file_path, 'w') \
+                    as ca_certificate_chain_file:
+                ca_certificate_chain_file.writelines(
+                    temp_intermediate_ca_certificate_file_contents)
+                ca_certificate_chain_file.writelines(
+                    temp_root_ca_certificate_file_contents)
+
+            # close the temp files
+            temp_root_ca_certificate_file.close()
+            temp_intermediate_ca_certificate_file.close()
+
+            # get ca certificate chain local checksum
+            ca_certificate_chain_checksum = \
+                _hash_file(ca_certificate_chain_file_path)
+
+            # create ca certificate chain file metadata
+            ca_certificate_chain_file_metadata = _create_file_metadata(
+                "ca_certificate_chain",
+                CA_CERTIFICATE_CHAIN_FILE_NAME,
+                ca_certificate_chain_checksum)
+            # update payload with ca certificate chain file metadata
+            _update_payload_with_metadata(
+                output_payload,
+                ca_certificate_chain_file_metadata)
     else:
         # cannot continue if checksum is unavailable
         raise ValueError('requested checksum is unavailable')
