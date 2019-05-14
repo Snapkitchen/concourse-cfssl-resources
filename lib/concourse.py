@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 # pip
 import boto3
+import botocore
 
 # local
 import lib.cfssl
@@ -362,6 +363,59 @@ def _action_is_renew(payload: dict) -> bool:
 
 
 # =============================================================================
+# _keypair_exists
+# =============================================================================
+def _keypair_exists(certificate, private_key) -> bool:
+    '''checks if a keypair exists
+
+    attempts to get the checksums from each object
+    this results in a HeadObject call, which if failed
+    due to permissions, indicates the object is missing
+
+    both objects must exist to return True
+
+    if either object is missing, return False
+
+    otherwise raise
+
+    note: this will return a false negative if
+    the client legitimately does not have permissions
+
+    s3 does not let a user know if an object actually exists
+    without resulting to listing the bucket keys and parsing them
+    '''
+    try:
+        _get_s3_object_checksum(certificate)
+        _get_s3_object_checksum(private_key)
+    except botocore.exceptions.ClientError as e:
+        if ('Error' in e.response and
+                e.response['Error']['Code'] == '403' and
+                e.response['Error']['Message'] == 'Forbidden'):
+            return False
+        else:
+            raise
+    return True
+
+
+# =============================================================================
+# _should_overwrite_keypair
+# =============================================================================
+def _should_overwrite_keypair(
+        payload: dict,
+        certificate,
+        private_key) -> bool:
+    if _keypair_exists(certificate, private_key):
+        if ('params' in payload and
+                'allow_overwrite' in payload['params'] and
+                payload['params']['allow_overwrite'] is True):
+            return True
+        else:
+            return False
+    else:
+        return True
+
+
+# =============================================================================
 #
 # private checksum functions
 #
@@ -684,6 +738,13 @@ def root_ca_out() -> None:
         _get_repository_file_path(
             repository_dir,
             ROOT_CA_PRIVATE_KEY_FILE_NAME)
+
+    # check if keypair can be overwritten
+    if not _should_overwrite_keypair(
+            input_payload,
+            root_ca_certificate,
+            root_ca_private_key):
+        raise RuntimeError("cannot overwrite root ca keypair")
 
     # check action
     if _action_is_create(input_payload):
@@ -1082,6 +1143,13 @@ def intermediate_ca_out() -> None:
             input_payload,
             s3_resource,
             INTERMEDIATE_CA_PRIVATE_KEY_FILE_NAME)
+
+    # check if keypair can be overwritten
+    if not _should_overwrite_keypair(
+            input_payload,
+            intermediate_ca_certificate,
+            intermediate_ca_private_key):
+        raise RuntimeError("cannot overwrite intermediate ca keypair")
 
     # check action
     if _action_is_create(input_payload):
@@ -1692,6 +1760,13 @@ def leaf_out() -> None:
             input_payload,
             s3_resource,
             leaf_private_key_file_name)
+
+    # check if keypair can be overwritten
+    if not _should_overwrite_keypair(
+            input_payload,
+            leaf_certificate,
+            leaf_private_key):
+        raise RuntimeError("cannot overwrite leaf keypair")
 
     # check action
     if _action_is_create(input_payload):

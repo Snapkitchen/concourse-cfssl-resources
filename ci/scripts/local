@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+
+set -e
+
+readonly LOCAL_REPO="docker-registry.service.local.consul:5000"
+readonly PARENT_IMAGE="${LOCAL_REPO}/snapkitchen/concourse-cfssl-baseline:latest"
+readonly ROOT_IMAGE="${LOCAL_REPO}/snapkitchen/concourse-cfssl-root-ca-resource:latest"
+readonly INTERMEDIATE_IMAGE="${LOCAL_REPO}/snapkitchen/concourse-cfssl-intermediate-ca-resource:latest"
+readonly LEAF_IMAGE="${LOCAL_REPO}/snapkitchen/concourse-cfssl-leaf-resource:latest"
+readonly IMAGES=(
+  "${ROOT_IMAGE}"
+  "${INTERMEDIATE_IMAGE}"
+  "${LEAF_IMAGE}"
+)
+
+if [[ "${1:-}" == "build" ]]
+then
+  shift
+
+  # build parent
+  docker \
+    build \
+      --rm \
+      -t "${PARENT_IMAGE}" \
+      -f "baseline.Dockerfile" \
+      .
+
+  # build root ca image
+  docker \
+    build \
+      --rm \
+      -t "${ROOT_IMAGE}" \
+      --build-arg "PARENT_IMAGE=${PARENT_IMAGE}" \
+      -f "root-ca.Dockerfile" \
+      .
+
+  # build intermediate ca image
+  docker \
+    build \
+      --rm \
+      -t "${INTERMEDIATE_IMAGE}" \
+      --build-arg "PARENT_IMAGE=${PARENT_IMAGE}" \
+      -f "intermediate-ca.Dockerfile" \
+      .
+
+  # build leaf image
+  docker \
+    build \
+      --rm \
+      -t "${LEAF_IMAGE}" \
+      --build-arg "PARENT_IMAGE=${PARENT_IMAGE}" \
+      -f "leaf.Dockerfile" \
+      .
+fi
+
+if [[ "${1:-}" == "push" ]]
+then
+  shift
+
+  # push images
+  for image in "${IMAGES[@]}"
+  do
+    docker push "${image}"
+  done
+fi

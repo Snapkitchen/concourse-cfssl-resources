@@ -1,5 +1,6 @@
 2019-05-14
 
+- [breaking] overwriting an existing keypair now requires setting `allow_overwrite` put param to `true`
 - [enhancement] support sts assumerole with `role_arn`, `session_name`, and `session_duration`
 
 2018-12-20

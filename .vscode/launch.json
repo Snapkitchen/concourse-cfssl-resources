@@ -9,7 +9,21 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/resources/root-ca/scripts/check",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "out (Integrated Terminal)",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/resources/root-ca/scripts/out",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": ["."]
         },
         {
             "name": "Python: Attach",

@@ -163,6 +163,8 @@ see cfssl documentation for best practices and examples
 
 - `action`: _optional_. the operation to perform, either `create` or `renew`. default: `create`
 
+- `allow_overwrite`: _optional_. allow overwriting existing keypair. default: `false`
+
 **create parameters**
 
 - `CN`: _required_. the certificate common name
@@ -312,6 +314,8 @@ see cfssl documentation for best practices and examples
 **common parameters**
 
 - `action`: _optional_. the operation to perform, either `create` or `renew`. default: `create`
+
+- `allow_overwrite`: _optional_. allow overwriting existing keypair. default: `false`
 
 - `ca`: _optional_. the ca parameters
 
@@ -478,6 +482,8 @@ see cfssl documentation for best practices and examples
 **common parameters**
 
 - `action`: _optional_. the operation to perform, either `create` or `renew`. default: `create`
+
+- `allow_overwrite`: _optional_. allow overwriting existing keypair. default: `false`
 
 - `leaf`: _optional_. the leaf parameters
 
