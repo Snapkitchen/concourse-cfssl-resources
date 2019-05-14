@@ -92,14 +92,27 @@ def _format_s3_key_with_prefix(prefix: Optional[str], key: str) -> str:
 
 
 # =============================================================================
+# _get_payload_credentials
+# =============================================================================
+def _get_payload_credentials(payload: dict) -> dict:
+    return {
+        'aws_access_key_id': payload['source']['access_key_id'],
+        'aws_secret_access_key': payload['source']['secret_access_key'],
+        'region_name': payload['source']['region_name']
+    }
+
+
+# =============================================================================
 # _get_role_credentials
 # =============================================================================
 def _get_role_credentials(payload: dict) -> dict:
+    initial_session = boto3.session.Session(
+        **_get_payload_credentials(payload))
     session_name = payload['source'].get(
         'session_name',
         'concourse-cfssl-resource')
     session_duration = payload['source'].get('session_duration', 900)
-    sts_client = boto3.client(
+    sts_client = initial_session.client(
         'sts',
         region_name=payload['source']['region_name'])
     params = {
@@ -123,11 +136,7 @@ def _get_boto3_session(payload: dict) -> boto3.session.Session:
     if 'role_arn' in payload['source']:
         credentials = _get_role_credentials(payload)
     else:
-        credentials = {
-            'aws_access_key_id': payload['source']['access_key_id'],
-            'aws_secret_access_key': payload['source']['secret_access_key'],
-            'region_name': payload['source']['region_name']
-        }
+        credentials = _get_payload_credentials(payload)
     return boto3.session.Session(**credentials)
 
 
