@@ -119,6 +119,12 @@ creates and gets root ca using cfssl
 
 - `region_name`: _required_. the region the bucket is in.
 
+- `role_arn`: _optional_. the aws role arn to assume using the provided credentials.
+
+- `session_name`: _optional_. the session name to use when assuming the role in `role_arn`. default: `concourse-cfssl-resource`
+
+- `session_duration`: _optional_. the duration in seconds for the lease on credentials obtained from `role_arn`. default: `900`
+
 - `prefix`: _optional_. the prefix path to prepend to the cfssl files. e.g. `prefix: my/prefix/path` will result in a root ca cert file path of `{bucket}/my/prefix/path/root-ca.pem` default: `null`
 
 - `endpoint`: _optional_. custom endpoint for using S3 compatible provider.
@@ -260,6 +266,12 @@ creates and gets intermediate ca using cfssl
 - `secret_access_key`: _required_. the aws secret access key to use when accessing the bucket
 
 - `region_name`: _required_. the region the bucket is in.
+
+- `role_arn`: _optional_. the aws role arn to assume using the provided credentials.
+
+- `session_name`: _optional_. the session name to use when assuming the role in `role_arn`. default: `concourse-cfssl-resource`
+
+- `session_duration`: _optional_. the duration in seconds for the lease on credentials obtained from `role_arn`. default: `900`
 
 - `prefix`: _optional_. the prefix path to prepend to the cfssl files. e.g. `prefix: my/prefix/path` will result in an intermediate ca cert file path of `{bucket}/my/prefix/path/intermediate-ca.pem` default: `null`  
   
@@ -406,6 +418,12 @@ creates and gets leaf using cfssl
 - `secret_access_key`: _required_. the aws secret access key to use when accessing the bucket
 
 - `region_name`: _required_. the region the bucket is in.
+
+- `role_arn`: _optional_. the aws role arn to assume using the provided credentials.
+
+- `session_name`: _optional_. the session name to use when assuming the role in `role_arn`. default: `concourse-cfssl-resource`
+
+- `session_duration`: _optional_. the duration in seconds for the lease on credentials obtained from `role_arn`. default: `900`
 
 - `prefix`: _optional_. the prefix path to prepend to the cfssl files. e.g. `prefix: my/prefix/path` will result in a leaf cert file path of `{bucket}/my/prefix/path/{leaf-name}.pem` default: `null`  
   

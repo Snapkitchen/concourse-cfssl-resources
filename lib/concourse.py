@@ -92,13 +92,43 @@ def _format_s3_key_with_prefix(prefix: Optional[str], key: str) -> str:
 
 
 # =============================================================================
+# _get_role_credentials
+# =============================================================================
+def _get_role_credentials(payload: dict) -> dict:
+    session_name = payload['source'].get(
+        'session_name',
+        'concourse-cfssl-resource')
+    session_duration = payload['source'].get('session_duration', 900)
+    sts_client = boto3.client(
+        'sts',
+        region_name=payload['source']['region_name'])
+    params = {
+        'RoleArn': payload['source']['role_arn'],
+        'RoleSessionName': session_name,
+        'DurationSeconds': session_duration,
+    }
+    response = sts_client.assume_role(**params).get("Credentials")
+    return {
+        'aws_access_key_id': response['AccessKeyId'],
+        'aws_secret_access_key': response['SecretAccessKey'],
+        'aws_session_token': response['SessionToken'],
+        'region_name': payload['source']['region_name']
+    }
+
+
+# =============================================================================
 # _get_boto3_session
 # =============================================================================
 def _get_boto3_session(payload: dict) -> boto3.session.Session:
-    return boto3.session.Session(
-        aws_access_key_id=payload['source']['access_key_id'],
-        aws_secret_access_key=payload['source']['secret_access_key'],
-        region_name=payload['source']['region_name'])
+    if 'role_arn' in payload['source']:
+        credentials = _get_role_credentials(payload)
+    else:
+        credentials = {
+            'aws_access_key_id': payload['source']['access_key_id'],
+            'aws_secret_access_key': payload['source']['secret_access_key'],
+            'region_name': payload['source']['region_name']
+        }
+    return boto3.session.Session(**credentials)
 
 
 # =============================================================================
